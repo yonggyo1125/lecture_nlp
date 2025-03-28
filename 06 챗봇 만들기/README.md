@@ -110,7 +110,6 @@ plt.ylabel('Number of Sentences')
 
 ![스크린샷 2025-03-28 오후 9 29 07](https://github.com/user-attachments/assets/bff85033-e5f3-4598-ad7c-a4846be2daf0)
 
-
 - 그래프를 보면 빨간색 히스토그램은 어절 단위에 대한 히스토그램이고, 형태소의 경우는 초록색이고, 음절의 경우는 파란색이다. 그래프 결과를 보면 어절이 가장 길이가 낮은 분포를 보이고, 그다음으로는 형태소, 가장 긴 길이를 가지고 있는 것이 음절 단위다. 하지만 이러한 분석은 어떤 텍스트 데이터를 사용하더라도 당연한 결과다. 그리고 히스토그램을 통해 각 길이가 어느 쪽으로 치우쳐 있는지 혹은 각 데이터에 이상치는 없는지 등도 확인할 수 있는데 이 히스토그램을 통해서는 직관적으로 확인하기 어렵다. 이는 각 히스토그램의 y값의 분포가 매우 다르기 때문인데, y값의 크기를 조정함으로써 이를 해결할 수 있다. 위의 히스토그램 코드를 다음과 같이 수정한 후 결과를 확인해 보자.
 
 ```python
@@ -128,5 +127,65 @@ plt.ylabel('Number of Sentences')
 
 ![스크린샷 2025-03-28 오후 9 33 39](https://github.com/user-attachments/assets/1a9e94e9-50ab-4ef8-bf2b-dca93115fca0)
 
+- 히스토그램의 y 값의 스케일을 조정한 그래프를 보면 이전에는 보이지 않았던 분포의 꼬리 부분이 어떻게 분포돼 있었는지 보기 쉽게 나온다. 어절의 경우 길이가 20인 경우가 이상치 데이터로 존재하고 형태소나 음절의 경우 각각 30, 45 정도 길이에서 이상치가 존재한다. 이러한 길이 분포에 대한 분석 내용을 바탕으로 입력 문장의 길이를 어떻게 설정할지 정의하면 된다.
+- 이제 각 길이값을 히스토그램이 아닌 정확한 수치를 확인하기 위해 각 기준별 길이에 대한 여러 가지 통곗값을 확인해 보자. 우선 어절에 대해 각 통계값을 출력해 보자.
 
+```python
+print('어절 최대길이: {}'.format(np.max(sent_len_by_token)))
+print('어절 최소길이: {}'.format(np.min(sent_len_by_token)))
+print('어절 평균길이: {:.2f}'.format(np.mean(sent_len_by_token)))
+print('어절 길이 표준편차: {:.2f}'.format(np.std(sent_len_by_token)))
+print('어절 중간길이: {}'.format(np.median(sent_len_by_token)))
+print('제 1 사분위 길이: {}'.format(np.percentile(sent_len_by_token, 25)))
+print('제 3 사분위 길이: {}'.format(np.percentile(sent_len_by_token, 75)))
+```
 
+```
+어절 최대 길이: 21
+어절 최소 길이: 1
+어절 평균 길이: 3.64
+어절 길이 표준편차: 1.74
+어절 중간 길이: 3.0
+제1사분위 길이: 2.0
+제3사분위 길이: 5.0
+```
+
+- 어절로 나눈 길이의 통곗값은 위와 같이 확인할 수 있다. 해당 통곗값은 앞서 진행한 데이터 분석과 동일하다. 이제 이 통곗값들을 어절뿐만 아니라 음절, 형태소 단위로 나눈 길이값에 대해서도 확인해 보자.
+
+```python
+print('형태소 최대길이: {}'.format(np.max(sent_len_by_morph)))
+print('형태소 최소길이: {}'.format(np.min(sent_len_by_morph)))
+print('형태소 평균길이: {:.2f}'.format(np.mean(sent_len_by_morph)))
+print('형태소 길이 표준편차: {:.2f}'.format(np.std(sent_len_by_morph)))
+print('형태소 중간길이: {}'.format(np.median(sent_len_by_morph)))
+print('형태소 1/4 퍼센타일 길이: {}'.format(np.percentile(sent_len_by_morph, 25)))
+print('형태소 3/4 퍼센타일 길이: {}'.format(np.percentile(sent_len_by_morph, 75)))
+```
+
+```python
+print('음절 최대길이: {}'.format(np.max(sent_len_by_eumjeol)))
+print('음절 최소길이: {}'.format(np.min(sent_len_by_eumjeol)))
+print('음절 평균길이: {:.2f}'.format(np.mean(sent_len_by_eumjeol)))
+print('음절 길이 표준편차: {:.2f}'.format(np.std(sent_len_by_eumjeol)))
+print('음절 중간길이: {}'.format(np.median(sent_len_by_eumjeol)))
+print('음절 1/4 퍼센타일 길이: {}'.format(np.percentile(sent_len_by_eumjeol, 25)))
+print('음절 3/4 퍼센타일 길이: {}'.format(np.percentile(sent_len_by_eumjeol, 75)))
+```
+
+|        | 최대 | 최소 | 평균  | 표준편차 | 중간값 | 제1사분위 | 제3사분위 |
+| ------ | ---- | ---- | ----- | -------- | ------ | --------- | --------- |
+| 어절   | 21   | 1    | 3.64  | 1.74     | 3      | 2         | 5         |
+| 형태소 | 33   | 1    | 6.88  | 3.08     | 6      | 5         | 8         |
+| 음절   | 57   | 1    | 11.31 | 4.98     | 10     | 8         | 14        |
+
+- 각 길이에 대해 확인한 결과를 정리하면 위와 같은 결과가 나올 것이다. 평균값을 확인해 보면 우선 전체 문자 수는 11개 정도의 평균값을 가지고 있고, 띄어쓰기로 구분한 어절의 경우 각 문장당 3\~4 정도의 평균값을 보인다. 형태소로 분석한 경우 이보다 조금 더 큰 6\~7 정도의 평균값을 가지고 있다.
+- 이제는 전체 데이터를 한번에 보기 쉽게 박스 플롯으로 그려보자. 박스 플롯에서도 3개의 기준을 모두 한 번에 확인한다.
+
+```python
+plt.figure(figsize=(12, 5))
+plt.boxplot([sent_len_by_token, sent_len_by_morph, sent_len_by_eumjeol],
+            labels=['Eojeol', 'Morph', 'Eumjeol'],
+            showmeans=True)
+```
+
+- 여러 가지 값에 대해 한 번에 박스 플롯을 그리면 인자로 각 값들을 리스트를 만들어 넣으면 된다. 각 박스 플롯의 제목 역시 마찬가지로 리스트로 제목을 넣으면 된다. 이제 그려진 박스 플롯을 확인해 보자.
