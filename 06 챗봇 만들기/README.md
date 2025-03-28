@@ -263,3 +263,7 @@ answer_sent_len_by_morph = [len(t) for t in answer_morph_tokenized_sentences]
 plt.figure(figsize=(12, 5))
 plt.boxplot([query_sent_len_by_morph, answer_sent_len_by_morph], labels=['Query', 'Answer'])
 ```
+
+![스크린샷 2025-03-28 오후 10 42 29](https://github.com/user-attachments/assets/616aa45e-d720-4bfa-af2f-c271065807ce)
+
+
