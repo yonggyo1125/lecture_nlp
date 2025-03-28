@@ -266,4 +266,50 @@ plt.boxplot([query_sent_len_by_morph, answer_sent_len_by_morph], labels=['Query'
 
 ![스크린샷 2025-03-28 오후 10 42 29](https://github.com/user-attachments/assets/616aa45e-d720-4bfa-af2f-c271065807ce)
 
+- 박스 플롯을 보면 질문 데이터와 응답 데이터에 대한 분포가 앞서 그렸던 히스토그램과 통곗값에서 본 것과 조금은 다른 모습을 확인할 수 있다. 통계값에서는 답변 데이터에 대한 평균 길이가 질문 데이터보다 길었는데, 박스 플롯에 그려진 박스의 경우 질문 데이터가 더 큰 것을 확인할 수 있다. 즉, 답변 데이터의 경우 길이가 긴 이상치 데이터가 많아 평균값이 더욱 크게 측정됐다는 것을 확인할 수 있다. 이는 두 데이터가 전체적으로 차이가 난다고 하기보다는 답변 데이터에 이상치 데이터가 많아서 이렇게 측정된 것으로 해석할 수 있다.
+- 이제 이 길이값을 통해 모델에 적용될 문장의 최대 길이를 결정해야 한다. 위에 나온 문장 길이에 대한 통계를 보고 중간값이나 제3사분위에 값을 적용할 수도 있다. 하지만 실제로 통계를 반영한 길이를 그대로 넣었을 때 만족할 만한 성능을 얻기는 쉽지 않았다. 디코더의 경우 문장의 뒷부분이 일부 잘려서 생성하고자 하는 문장이 완전한 문장이 아닌 문제가 있다는 것을 확인했다. 모델 학습 시도를 여러 번 한 끝에 이 책에서는 경험적으로 좋은 성능이 나올 수 있는 문장 길이를 25로 설정했다. 이 길이는 문장 길이 3사분위값 주변을 탐색하면서 가장 문장 생성를 잘 할 수 있는 길이를 찾아본 결과다.
 
+### 데이터 어휘 빈도 분석
+
+- 이때까지는 데이터의 길이 부분에 대해 분석을 진행했다. 이제는 데이터에서 사용되는 단어에 대해 분석해 보자. 어떤 단어가 사용되는지, 자주 사용되는 단어는 어떤 것들이 있는지 알아보겠다.
+- 이제 형태소 단위로 토크나이징한 데이터를 사용해서 자주 사용하는 단어를 알아보자. 단순히 토크나이징한 데이터에서 자주 사용되는 단어를 분석하면 결과는 '이', '가', '를' 등의 조사가 가장 큰 빈도수를 차지할 것이다. 이는 어떤 데이터이든 당연한 결과이므로 분석하는 데 크게 의미가 없다. 따라서 의미상 중요한 명사, 형용사, 동사만 따로 모은 후 빈도수 분석을 진행한다.
+- 먼저 품사에 따라 구분해야 명사, 형용사, 동사를 따로 모을 수 있는데, 품사를 확인하는 방법은 `KoNLPy`의 품사 분류(POS-tagging) 모듈을 사용하면 된다. 앞서 사용한 `Okt` 형태소 분석기의 품사 분류 기능을 사용하면 다음과 같이 결과가 나온다.
+
+```python
+okt.pos('오늘밤은유난히덥구나')
+```
+
+```
+[('오늘밤', 'Noun'), ('은', 'Josa'), ('유난히', 'Adverb'), ('덥구나', 'Adjective')]
+```
+
+- 예시 문장인 '오늘밤은유난히덥구나'를 `Okt` 형태소 분석기를 사용해서 품사를 확인해 보면 위와 같이 결과가 나온다. 보다시피 각 형태소와 그에 해당하는 품사가 나오는데, 여기서는 명사, 형용사, 동사만 사용한다고 했으므로 `Noun`, `Adjective`, `Verb`만 사용하면 된다. 이제 각 문장에서 명사, 형용사, 동사를 제외한 단어를 모두 제거한 문자열을 만들어보자.
+
+```python
+uery_NVA_token_sentences = list()
+answer_NVA_token_sentences = list()
+
+for s in query_sentences:
+    for token, tag in okt.pos(s.replace(' ', '')):
+        if tag == 'Noun' or tag == 'Verb' or tag == 'Adjective':
+            query_NVA_token_sentences.append(token)
+
+for s in answer_sentences:
+    temp_token_bucket = list()
+    for token, tag in okt.pos(s.replace(' ', '')):
+        if tag == 'Noun' or tag == 'Verb' or tag == 'Adjective':
+            answer_NVA_token_sentences.append(token)
+
+query_NVA_token_sentences = ' '.join(query_NVA_token_sentences)
+answer_NVA_token_sentences = ' '.join(answer_NVA_token_sentences)
+```
+
+- 이처럼 간단히 전처리하고 나면 동사, 명사, 형용사를 제외한 나머지 문자는 모두 제거된 상태의 문자열이 만들어질 것이다. 이 문자열을 사용해서 어휘 빈도 분석을 진행한다. 앞서 4, 5장에서 사용했던 워드클라우드를 사용해 데이터의 어휘 빈도를 분석할 것이다. 한글 데이터를 워드클라우드로 그리기 위해서는 추가로 한글 폰트를 설정해야 한다.
+
+```python
+query_wordcloud = WordCloud(font_path= DATA_IN_PATH + 'NanumGothic.ttf').generate(query_NVA_token_sentences)
+
+plt.imshow(query_wordcloud, interpolation='bilinear')
+plt.axis('off')
+plt.show()
+```
