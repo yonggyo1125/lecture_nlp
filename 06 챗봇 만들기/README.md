@@ -111,3 +111,18 @@ plt.ylabel('Number of Sentences')
 ![스크린샷 2025-03-28 오후 9 29 07](https://github.com/user-attachments/assets/bff85033-e5f3-4598-ad7c-a4846be2daf0)
 
 
+- 그래프를 보면 빨간색 히스토그램은 어절 단위에 대한 히스토그램이고, 형태소의 경우는 초록색이고, 음절의 경우는 파란색이다. 그래프 결과를 보면 어절이 가장 길이가 낮은 분포를 보이고, 그다음으로는 형태소, 가장 긴 길이를 가지고 있는 것이 음절 단위다. 하지만 이러한 분석은 어떤 텍스트 데이터를 사용하더라도 당연한 결과다. 그리고 히스토그램을 통해 각 길이가 어느 쪽으로 치우쳐 있는지 혹은 각 데이터에 이상치는 없는지 등도 확인할 수 있는데 이 히스토그램을 통해서는 직관적으로 확인하기 어렵다. 이는 각 히스토그램의 y값의 분포가 매우 다르기 때문인데, y값의 크기를 조정함으로써 이를 해결할 수 있다. 위의 히스토그램 코드를 다음과 같이 수정한 후 결과를 확인해 보자.
+
+```python
+plt.figure(figsize=(12, 5))
+plt.hist(sent_len_by_token, bins=50, range=[0,50], alpha=0.5, color= 'r', label='eojeol')
+plt.hist(sent_len_by_morph, bins=50, range=[0,50], alpha=0.5, color='g', label='morph')
+plt.hist(sent_len_by_eumjeol, bins=50, range=[0,50], alpha=0.5, color='b', label='eumjeol')
+plt.yscale('log')
+plt.title('Sentence Length Histogram by Eojeol Token')
+plt.xlabel('Sentence Length')
+plt.ylabel('Number of Sentences')
+```
+
+- 이전 코드와 달라진 점은 중간에 yscale 함수를 사용했다는 점이다. 함수의 인자로 사용된 `log`는 각 그래프가 가지는 y값의 스케일을 조정함으로써 차이가 큰 데이터에 대해서도 함께 비교할 수 있게 한다. 그래프는 다음과 같이 그려질 것이다.
+
