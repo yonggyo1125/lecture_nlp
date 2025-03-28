@@ -189,3 +189,8 @@ plt.boxplot([sent_len_by_token, sent_len_by_morph, sent_len_by_eumjeol],
 ```
 
 - 여러 가지 값에 대해 한 번에 박스 플롯을 그리면 인자로 각 값들을 리스트를 만들어 넣으면 된다. 각 박스 플롯의 제목 역시 마찬가지로 리스트로 제목을 넣으면 된다. 이제 그려진 박스 플롯을 확인해 보자.
+
+![스크린샷 2025-03-28 오후 10 02 20](https://github.com/user-attachments/assets/922ba92d-ecf5-4595-8cbc-f6f702dafd0b)
+
+
+
