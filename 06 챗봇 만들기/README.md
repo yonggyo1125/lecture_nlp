@@ -239,4 +239,27 @@ plt.ylabel('Number of Queries')
 
 ![스크린샷 2025-03-28 오후 10 32 01](https://github.com/user-attachments/assets/e8470195-183d-455b-8813-af2a9de416d4)
 
+- 답변 데이터가 질문 데이터보다 좀 더 이상치 값이 많은 것을 확인할 수 있다. 상대적으로 질문의 경우 평균 주변에 잘 분포돼 있음을 확인할 수 있다. 이 두 데이터에 대해 정확한 평균값을 확인하려면 다음과 같은 결과가 나올 것이다.
 
+|             | 최대 | 최소 | 평균 | 표준편차 | 중간값 | 제1사분위 | 제3사분위 |
+| ----------- | ---- | ---- | ---- | -------- | ------ | --------- | --------- |
+| 질문 데이터 | 23   | 1    | 6.09 | 2.88     | 6.0    | 4         | 8         |
+| 답변 데이터 | 33   | 1    | 7.67 | 3.08     | 7      | 6         | 9         |
+
+- 통곗값을 확인해 보면 최댓값의 경우 답변 데이터가 훨씬 크다는 것을 확인할 수 있다. 그리고 평균의 경우에도 앞서 확인한 것과 같이 질문 데이터가 좀 더 작은 값을 보인다. 이제 두 데이터를 박스 플롯으로 그려보자
+
+```python
+query_sentences = list(data['Q'])
+answer_sentences = list(data['A'])
+
+query_morph_tokenized_sentences = [okt.morphs(s.replace(' ', '')) for s in query_sentences]
+query_sent_len_by_morph = [len(t) for t in query_morph_tokenized_sentences]
+
+answer_morph_tokenized_sentences = [okt.morphs(s.replace(' ', '')) for s in answer_sentences]
+answer_sent_len_by_morph = [len(t) for t in answer_morph_tokenized_sentences]
+```
+
+```python
+plt.figure(figsize=(12, 5))
+plt.boxplot([query_sent_len_by_morph, answer_sent_len_by_morph], labels=['Query', 'Answer'])
+```
