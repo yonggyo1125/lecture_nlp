@@ -192,5 +192,32 @@ plt.boxplot([sent_len_by_token, sent_len_by_morph, sent_len_by_eumjeol],
 
 ![스크린샷 2025-03-28 오후 10 02 20](https://github.com/user-attachments/assets/922ba92d-ecf5-4595-8cbc-f6f702dafd0b)
 
+- 데이터 분포를 나타낸 박스 플롯을 보면 꼬리가 긴 형태로 분포돼 있음을 확인할 수 있다. 대체로 문장의 길이는 5\~15의 길이를 중심으로 분포를 이루고 있고 음절의 경우 길이 분포가 어절과 형태소에 비해 훨씬 더 크다는 점을 알 수 있다.
+- 지금은 질문과 답변을 모두 합쳐서 데이터 전체 문장의 길이 분포를 확인했다. 그런데 앞으로 만들 모델의 경우 질문이 입력으로 들어가는 부분과 답변이 입력으로 들어가는 부분이 따로 구성돼 있다. 따라서 이번에는 질문과 답변을 구분해서 분석해 보자.
 
+### 질문, 답변 각각에 대한 문장 길이 분포 분석
 
+- 이제 전체 데이터가 아닌 질문과 응답으로 구성된 각 문장에 대한 길이 분포를 따로 알아보자. 앞서 길이를 분석할 때는 음절, 어절, 형태소 단위로 구분해서 분석했다. 여기서는 그 중에서 형태소 기준으로만 길이를 분석해 본다.
+
+```python
+query_sentences = list(data['Q'])
+answer_sentences = list(data['A'])
+
+query_morph_tokenized_sentences = [okt.morphs(s.replace(' ', '')) for s in query_sentences]
+query_sent_len_by_morph = [len(t) for t in query_morph_tokenized_sentences]
+
+answer_morph_tokenized_sentences = [okt.morphs(s.replace(' ', '')) for s in answer_sentences]
+answer_sent_len_by_morph = [len(t) for t in answer_morph_tokenized_sentences]
+```
+
+- 우선은 데이터프레임의 질문 열과 답변 열을 각각 리스트로 정의한 후 앞서 진행한 것과 동일하게 `KoNLPy`의 `Okt` 형태소 분석기를 사용해 토크나이징한 후 구분된 데이터의 길이를 하나의 변수로 만든다. 이 과정을 질문과 답변에 대해 모두 진행했다. 이제 이렇게 형태소로 나눈 길이를 히스토그램으로 그려보자. 질문과 답변에 대한 길이를 한 번에 히스토그램으로 그린다.
+
+```python
+plt.figure(figsize=(12, 5))
+plt.hist(query_sent_len_by_morph, bins=50, range=[0,50], color='g', label='Query')
+plt.hist(answer_sent_len_by_morph, bins=50, range=[0,50], color='r', alpha=0.5, label='Answer')
+plt.legend()
+plt.title('Query Length Histogram by Morph Token')
+plt.xlabel('Query Length')
+plt.ylabel('Number of Queries')
+```
