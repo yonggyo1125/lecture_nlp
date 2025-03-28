@@ -64,6 +64,47 @@ sentences = list(data['Q']) + list(data['A'])
 ```
 
 - 질문과 답변 문장을 위와 같이 하나의 리스트로 만들었다면 이제 길이를 분석한다. 이전 장까지 2개의 기준으로 분석을 진행했다. 문자 단위의 길이 분석과 단어의 길이 분석을 진행했는데, 이번 장에서는 하나의 기준을 추가해서 세 가지 기준으로 분석을 진행한다. 분석 기준은 다음과 같다.
+
   - 분자 단위의 길이 분석(음절)
   - 단어 단위의 길이 분석(어절)
   - 형태소 단위의 길이 분석
+
+- 음절의 경우 문자 하나하나를 생각하면 된다. 어절의 경우 간단하게 띄어쓰기 단위로 생각하면 된다. 마지막으로 형태소 단위의 경우, 어절과 음절 사이라고 생각하면 된다. 여기서 형태소란 의미를 가지는 최소 단위를 의미한다. 예를 들어 이해해 보자. 다음과 같은 문장이 있다고 하자.
+
+```
+"자연어 처리 공부는 매우 어렵다"
+```
+
+- 이 문장을 각각 음절, 어절, 형태소 단위로 나눈 결과와 각 길이는 다음과 같다.
+  - 음절: "자","연","어","처","리","공","부","는","매","우","어","렵","다"(길이: 13)
+  - 어절: "자연어","처리","공부는","매우","어렵다"(길이: 5)
+  - 형태소: "자연어","처리","공부","는","매우","어렵","다"(길이: 7)
+- 이처럼 형태소로 나눴을 때가 단순히 띄어쓰기로 구분해서 나눴을 때보다 좀 더 의미를 잘 표현한다고 볼 수 있다. 이처럼 세 가지 기준으로 나눈 후 각 길이를 측정하겠다.
+- 먼저 각 기준에 따라 토크나이징해 보자. 형태소의 경우 토크나이징을 위해 2장에서 알아본 `KoNLPy'를 사용한다.
+
+```python
+tokenized_sentences = [s.split() for s in sentences]
+sent_len_by_token = [len(t) for t in tokenized_sentences]
+sent_len_by_eumjeol = [len(s.replace(' ', '')) for s in sentences]
+
+okt = Okt()
+
+morph_tokenized_sentences = [okt.morphs(s.replace(' ', '')) for s in sentences]
+sent_len_by_morph = [len(t) for t in morph_tokenized_sentences]
+```
+
+- 우선 띄어쓰기 기준으로 문장을 나눈다. 이 값의 길이를 측정해서 어절의 길이를 측정하고 이 값을 다시 붙여서 길이를 측정해서 음절의 길이로 사용한다. 마지막으로 형태소로 나누기 위해 `KoNLPy`에 `Okt` 형태소 분석기를 사용해서 나눈 후 길이를 측정한다.
+- 이렇게 각 기준으로 나눈 후 길이를 측정한 값을 각각 변수로 설정해두면 이 값을 사용해 그래프를 그리거나 각종 통곗값을 측정할 수 있다. 맷플롯립을 활용해 각각에 대한 그래프를 그려보자.
+
+```python
+plt.figure(figsize=(12, 5))
+plt.hist(sent_len_by_token, bins=50, range=[0,50], alpha=0.5, color= 'r', label='eojeol')
+plt.hist(sent_len_by_morph, bins=50, range=[0,50], alpha=0.5, color='g', label='morph')
+plt.hist(sent_len_by_eumjeol, bins=50, range=[0,50], alpha=0.5, color='b', label='eumjeol')
+plt.title('Sentence Length Histogram')
+plt.xlabel('Sentence Length')
+plt.ylabel('Number of Sentences')
+```
+
+- 그래프의 경우 세 가지 기준으로 구한 각 길이를 한번에 그려본다. 맷플롯립을 사용해 각 히스토그램을 정의한다. 이때 구분을 위해서 각 색을 구분지어서 설정하자. 그리고 이 그래프의 제목과 x축, y축 이름을 설정한 후 그래프를 그려보면 다음과 같이 나올 것이다.
+
