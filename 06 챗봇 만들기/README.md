@@ -313,3 +313,14 @@ plt.imshow(query_wordcloud, interpolation='bilinear')
 plt.axis('off')
 plt.show()
 ```
+
+![스크린샷 2025-03-28 오후 10 56 13](https://github.com/user-attachments/assets/c1b5abfe-603f-416f-a308-accdedf30d7c)
+
+
+
+![스크린샷 2025-03-28 오후 10 56 25](https://github.com/user-attachments/assets/dc094c87-1118-4ae5-9c35-39a617c47481)
+
+
+
+
+
