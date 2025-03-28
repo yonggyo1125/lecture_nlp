@@ -221,3 +221,6 @@ plt.title('Query Length Histogram by Morph Token')
 plt.xlabel('Query Length')
 plt.ylabel('Number of Queries')
 ```
+
+![스크린샷 2025-03-28 오후 10 29 31](https://github.com/user-attachments/assets/07b48a27-453c-4b11-a52e-a7d338fe8b9c)
+
