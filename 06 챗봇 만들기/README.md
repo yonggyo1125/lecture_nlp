@@ -316,11 +316,19 @@ plt.show()
 
 ![스크린샷 2025-03-28 오후 10 56 13](https://github.com/user-attachments/assets/c1b5abfe-603f-416f-a308-accdedf30d7c)
 
+- 답변 데이터에 대해서도 동일하게 워드클라우드를 그려서 살펴보자.
 
+```python
+query_wordcloud = WordCloud(font_path= DATA_IN_PATH + 'NanumGothic.ttf').generate(answer_NVA_token_sentences)
+
+plt.imshow(query_wordcloud, interpolation='bilinear')
+plt.axis('off')
+plt.show()
+```
 
 ![스크린샷 2025-03-28 오후 10 56 25](https://github.com/user-attachments/assets/dc094c87-1118-4ae5-9c35-39a617c47481)
 
+- 결과를 보면 응답 데이터에 대한 워드클라우드도 마찬가지로 비슷하게 연애에 관한 단어가 나온다. 질문 데이터와 다른 점은 '시간', '마음', '생각'과 같은 단어들이 더 많이 나온다는 것이다. 그리고 답변의 경우 대부분 권유의 문자열을 담고 있음을 유추할 수 있다.
+- 이제 모든 데이터 분석 과정이 끝났다. 분석한 결과를 토대로 데이터를 전처리하고 모델을 만들 차례다. 좀 더 상세한 데이터 분석이 필요하다면 데이터를 직접 하나씩 무작위로 확인하는 것도 도움이 될 수 있다.
 
-
-
-
+## 시퀀스 투 시퀀스 모델
