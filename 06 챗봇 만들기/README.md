@@ -224,3 +224,15 @@ plt.ylabel('Number of Queries')
 
 ![스크린샷 2025-03-28 오후 10 29 31](https://github.com/user-attachments/assets/07b48a27-453c-4b11-a52e-a7d338fe8b9c)
 
+- 히스토그램을 살펴보면 전체적으로 질문 문장 길이가 응답 문장 길이보다 상대적으로 짧다는 것을 확인할 수 있다. 앞서 했던 것과 동일하게 해당 길이에 대해서도 이상치를 잘 확인할 수 있게 y값의 크기를 조정해서 다시 히스토그램을 그려보자.
+
+```python
+plt.figure(figsize=(12, 5))
+plt.hist(query_sent_len_by_morph, bins=50, range=[0,50], color='g', label='Query')
+plt.hist(answer_sent_len_by_morph, bins=50, range=[0,50], color='r', alpha=0.5, label='Answer')
+plt.legend()
+plt.yscale('log', nonposy='clip')
+plt.title('Query Length Log Histogram by Morph Token')
+plt.xlabel('Query Length')
+plt.ylabel('Number of Queries')
+```
