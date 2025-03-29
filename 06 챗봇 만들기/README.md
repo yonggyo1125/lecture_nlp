@@ -340,4 +340,5 @@ plt.show()
 - 우선 이 모델은 순환 신경망(Recurrent Neural Networks, RNN) 모델을 기반으로 하여, 모델은 크게 인코드(Encoder) 부분과 디코더(Decoder) 부분으로 나눈다. 우선 인코더 부분에서 입력값을 받아 입력값의 정보를 담은 벡터를 만들어낸다. 이후 디코더에서는 이 벡터를 활용해 재귀적으로 출력값을 만들어내는 구조다.
 - 다음 그림은 "Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation" 논문에 나온 전체적인 모델에 대한 그림이다. 
 
+![스크린샷 2025-03-29 오전 9 38 01](https://github.com/user-attachments/assets/79353ff0-e794-4117-84a3-aedf88208d55)
 
