@@ -352,3 +352,502 @@ plt.show()
 - 디코더 부분을 살펴보면 우선 최초 입력값은 `\<START\>`라는 특정 토큰을 사용한다. 이는 문장의 시작을 나타내는 토큰이다. 디코더 역시 해당 단어가 임베딩된 벡터 형태로 입력값으로 들어가고 각 스텝마다 출력이 나온다. 이렇게 나온 출력 단어가 다음 스텝의 입력값으로 사용되는 구조다. 이렇게 반복된 후 최종적으로 `\<END\>`라는 토큰이 나오면 문장의 끝으로 보는 형태로 학습을 진행한다. 
 - 예시를 보면 알 수 있듯이 데이터 전처리 과정에서 특정 문장 길이로 자른 후 패딩 처리 및 `\<START\>`와 `\<END\>` 등의 각종 토큰을 넣어야 한다. 따라서 전처리 및 모델 구현 부분을 전체적으로 이해하는 것이 중요하다. 이제 모델을 구현해 보자.
 
+### 모델 구현
+- 이번 절에서는 모델을 파이썬 파일(preprocess.py)과 주피터 노트북 파일(Preprocess.ipynb, seq2seq.ipynb)로 구현하겠다. 각 파일을 하나씩 보면 preprocess.ipynb에는 데이터를 불러오고 가공하는 다양한 기능이 들어 있고, Preprocess.ipynb는 사전 구성과 학습에 사용될 데이터로 구성돼 있다. seq2seq.ipynb는 모델 구성과 학습, 평가, 실행 등을 할 수 있는 파일이다. 
+- 이제 각 파일을 하나씩 살펴보면서 어떤 식으로 구성돼 있는지 확인해 보자. 먼저 설정값을 지정해 둔 preprocess.py 파일부터 살펴보자.
+
+#### preprocess.py
+
+- preprocess.py 파일의 내용은 다음과 같다. 우선 모듈을 불러온다.
+
+```python
+import os
+import re
+import json
+
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
+
+from konlpy.tag import Okt
+```
+
+- 데이터 처리를 위해 활용하는 모듈들이다. 보다시피 한글 형태소를 활용하기 위한 `konlpy`, 데이터를 불러오기 위한 `pandas`, 운영체제의 기능을 사용하기 위한 `os`, 정규표현식을 사용하기 위한 `re`를 불러온다. 
+- 불러올 패키지를 정의했으니 이제 학습에 사용할 데이터를 위한 데이터 처리와 관련해서 몇가지 설정값을 지정한다.
+
+```python
+FILTERS = "([~.,!?\"':;)(])"
+PAD = "<PAD>"
+STD = "<SOS>"
+END = "<END>"
+UNK = "<UNK>"
+
+PAD_INDEX = 0
+STD_INDEX = 1
+END_INDEX = 2
+UNK_INDEX = 3
+
+MARKER = [PAD, STD, END, UNK]
+CHANGE_FILTER = re.compile(FILTERS)
+
+MAX_SEQUENCE = 25
+```
+
+- 정규 표현식에서 사용할 필터와 특별한 토큰인 `PAD`, `SOS`, `END`, `UNK`와 해당 토큰들의 인덱스 값을 지정했다. 
+- 특별한 토큰의 의미는 아래와 같다. 
+  - `PAD`: 어떤 의미도 없는 패딩 토큰이다.
+  - `SOS`: 시작 토큰을 의미한다.
+  - `END`: 종료 토큰을 의미한다.
+  - `UNK`: 사전에 없는 단어를 의미한다.
+- 그리고 필터의 경우 정규 표현식 모듈을 사용해 컨파일한다. 이를 미리 컴파일해두면 패턴을 사용할 때 반복적으로 컴파일하는 데 드는 시간을 줄일 수 있다. 
+- 다음으로 `load_data` 함수는 데이터를 판다스를 통해 불러오는 함수다.
+
+```python
+def load_data(path):
+    # 판다스를 통해서 데이터를 불러온다.
+    data_df = pd.read_csv(path, header=0)
+    # 질문과 답변 열을 가져와 question과 answer에 넣는다.
+    question, answer = list(data_df['Q']), list(data_df['A'])
+
+    return question, answer
+```
+
+- 판다스를 통해 데이터를 가져와 데이터프레임 형태로 만든 후 question과 answer를 돌려준다. inputs, outputs에는 question과 answer가 존재한다.
+- 다음으로 단어 사전을 만들기 위해서는 데이터를 전처리한 후 단어 리스트로 먼저 만들어야 하는데 이 기능을 수행하는 `data_tokenizer` 함수를 먼저 정의한다.
+
+```python
+def data_tokenizer(data):
+    # 토크나이징 해서 담을 배열 생성
+    words = []
+    for sentence in data:
+        # FILTERS = "([~.,!?\"':;)(])"
+        # 위 필터와 같은 값들을 정규화 표현식을
+        # 통해서 모두 "" 으로 변환 해주는 부분이다.
+        sentence = re.sub(CHANGE_FILTER, "", sentence)
+        for word in sentence.split():
+            words.append(word)
+    # 토그나이징과 정규표현식을 통해 만들어진
+    # 값들을 넘겨 준다.
+    return [word for word in words if word]
+```
+
+- 정규 표현식을 사용해 특수 기호를 모두 제거하고 공백 문자를 기준으로 단어들을 나눠서 전체 데이터의 모든 단어를 포함하는 단어 리스트로 만든다. 
+- 다음으로 `prepro_like_morphlized` 함수는 한글 텍스트를 토크나이징하기 위해 형태소로 분리하는 함수다. `KoNLPy`에서 제공하는 `Okt` 형태소 분리기를 사용해 형태소 기준으로 텍스트 데이터를 토크나이징한다. 이 함수에서는 환경설정 파일을 통해 사용할지 사용하지 않을지 선택할 수 있다. 
+
+```python
+def prepro_like_morphlized(data):
+    morph_analyzer = Okt()
+    result_data = list()
+    for seq in tqdm(data):
+        morphlized_seq = " ".join(morph_analyzer.morphs(seq.replace(' ', '')))
+        result_data.append(morphlized_seq)
+
+    return result_data
+```
+
+- 보다시피 형태소로 분류한 데이터를 받아 `morphs` 함수를 통해 토크나이징된 리스트 객체를 받고 이를 공백 문자를 기준으로 문자열로 재구성해서 반환한다. 
+- 이제 단어 사전을 만드는 함수를 정의하자.
+
+```python
+def load_vocabulary(path, vocab_path, tokenize_as_morph=False):
+    # 사전을 담을 배열 준비한다.
+    vocabulary_list = []
+    # 사전을 구성한 후 파일로 저장 진행한다.
+    # 그 파일의 존재 유무를 확인한다.
+    if not os.path.exists(vocab_path):
+        # 이미 생성된 사전 파일이 존재하지 않으므로
+        # 데이터를 가지고 만들어야 한다.
+        # 그래서 데이터가 존재 하면 사전을 만들기 위해서
+        # 데이터 파일의 존재 유무를 확인한다.
+        if (os.path.exists(path)):
+            # 데이터가 존재하니 판단스를 통해서
+            # 데이터를 불러오자
+            data_df = pd.read_csv(path, encoding='utf-8')
+            # 판다스의 데이터 프레임을 통해서
+            # 질문과 답에 대한 열을 가져 온다.
+            question, answer = list(data_df['Q']), list(data_df['A'])
+            if tokenize_as_morph:  # 형태소에 따른 토크나이져 처리
+                question = prepro_like_morphlized(question)
+                answer = prepro_like_morphlized(answer)
+            data = []
+            # 질문과 답변을 extend을
+            # 통해서 구조가 없는 배열로 만든다.
+            data.extend(question)
+            data.extend(answer)
+            # 토큰나이져 처리 하는 부분이다.
+            words = data_tokenizer(data)
+            # 공통적인 단어에 대해서는 모두
+            # 필요 없으므로 한개로 만들어 주기 위해서
+            # set해주고 이것들을 리스트로 만들어 준다.
+            words = list(set(words))
+            # 데이터 없는 내용중에 MARKER를 사전에
+            # 추가 하기 위해서 아래와 같이 처리 한다.
+            # 아래는 MARKER 값이며 리스트의 첫번째 부터
+            # 순서대로 넣기 위해서 인덱스 0에 추가한다.
+            # PAD = "<PADDING>"
+            # STD = "<START>"
+            # END = "<END>"
+            # UNK = "<UNKNWON>"
+            words[:0] = MARKER
+        # 사전을 리스트로 만들었으니 이 내용을
+        # 사전 파일을 만들어 넣는다.
+        with open(vocab_path, 'w', encoding='utf-8') as vocabulary_file:
+            for word in words:
+                vocabulary_file.write(word + '\n')
+
+    # 사전 파일이 존재하면 여기에서
+    # 그 파일을 불러서 배열에 넣어 준다.
+    with open(vocab_path, 'r', encoding='utf-8') as vocabulary_file:
+        for line in vocabulary_file:
+            vocabulary_list.append(line.strip())
+
+    # 배열에 내용을 키와 값이 있는
+    # 딕셔너리 구조로 만든다.
+    char2idx, idx2char = make_vocabulary(vocabulary_list)
+    # 두가지 형태의 키와 값이 있는 형태를 리턴한다.
+    # (예) 단어: 인덱스 , 인덱스: 단어)
+    return char2idx, idx2char, len(char2idx)
+```
+- 단어 사전의 경우 우선적으로 경로에 단어 사전 파일이 있다면 불러와서 사용한다. 만약 없다면 새로 만드는 구조인데, 단어 사전 파일이 없다면 데이터를 불러와서 앞서 정의한 함수를 이용해 데이터를 토크나이징해서 단어 리스트로 만든다. 그 후 파이썬 집합(set) 데이터 타입을 사용해 중복을 제거한 후 단어 리스트로 만든다. 또한 `MARKER`로 사전에 정의한 특정 토큰들을 단어 리스트 앞에 추가한 후 마지막으로 이 리스트를 지정한 경로에 저장한다. 
+- 이후에 지정한 경로에 파일이 존재하며, 만약 다시 `load_vocabulary`를 호출한다면 지정한 경로에서 단어 리스트를 불러온 후 `make_vocabulary` 함수의 결과로 `word2idx`, `idx2word`라는 두 개의 값을 얻는데, 각각 단어에 대한 인덱스와 인덱스에 대한 단어를 가진 딕셔너리 데이터에 해당한다. 이 두 값과 단어의 개수를 최종적으로 리턴하면 함수가 끝난다. 
+- 그럼 이번에는 `make_vocabulary` 함수를 살펴보자.
+
+```python
+def make_vocabulary(vocabulary_list):
+    # 리스트를 키가 단어이고 값이 인덱스인
+    # 딕셔너리를 만든다.
+    char2idx = {char: idx for idx, char in enumerate(vocabulary_list)}
+    # 리스트를 키가 인덱스이고 값이 단어인
+    # 딕셔너리를 만든다.
+    idx2char = {idx: char for idx, char in enumerate(vocabulary_list)}
+    # 두개의 딕셔너리를 넘겨 준다.
+    return char2idx, idx2char
+```
+
+- 함수를 보면 단어 리스트를 인자로 받는ㄴ데 이 리스트를 사용해 두 개의 딕셔너리를 만든다. 하나는 단어에 대한 인덱스를 나타내고, 나머지는 인덱스에 대한 단어를 나타내도록 만든 후 이 두 값을 리턴한다.
+- 마지막 줄의 사전 불러오기 함수를 호출하면 각각의 `word2idx`, `idx2word`, `vocab_size`에 앞에서 설명한 값이 들어가고 필요할 때마다 사용한다. 
+- 이해를 돕기 위해 예제를 통해 `vocabulary_list`가 어떻게 변하는지 설명하겠다. 만약 `vocabulary_list`에 \[안녕, 너는, 누구야\]가 들어있다고 해보자. `word2idx`에서는 `key`가 '안녕', '너는', '누구야'가 되고 `value`가 0, 1, 2가 되어 {'안녕': 0, '너는': 1, '누구야': 2}가 된다. 반대로 `idx2word`는 `key`가 0, 1, 2가 되고 `value`는 '안녕, '너는', '누구야'가 되어 {0: '안녕', 1: '너는', 2: '누구야'}가 된다.
+- 이제 불러온 데이터를 대상으로 인코더 부분과 디코더 부분에 대해 각각 전처리해야 한다. 우선 인코더에 적용될 입력값을 만드는 전처리 함수를 확인해 보자.
+
+```python
+def enc_processing(value, dictionary, tokenize_as_morph=False):
+    # 인덱스 값들을 가지고 있는
+    # 배열이다.(누적된다.)
+    sequences_input_index = []
+    # 하나의 인코딩 되는 문장의
+    # 길이를 가지고 있다.(누적된다.)
+    sequences_length = []
+    # 형태소 토크나이징 사용 유무
+    if tokenize_as_morph:
+        value = prepro_like_morphlized(value)
+
+    # 한줄씩 불어온다.
+    for sequence in value:
+        # FILTERS = "([~.,!?\"':;)(])"
+        # 정규화를 사용하여 필터에 들어 있는
+        # 값들을 "" 으로 치환 한다.
+        sequence = re.sub(CHANGE_FILTER, "", sequence)
+        # 하나의 문장을 인코딩 할때
+        # 가지고 있기 위한 배열이다.
+        sequence_index = []
+        # 문장을 스페이스 단위로
+        # 자르고 있다.
+        for word in sequence.split():
+            # 잘려진 단어들이 딕셔너리에 존재 하는지 보고
+            # 그 값을 가져와 sequence_index에 추가한다.
+            if dictionary.get(word) is not None:
+                sequence_index.extend([dictionary[word]])
+            # 잘려진 단어가 딕셔너리에 존재 하지 않는
+            # 경우 이므로 UNK(2)를 넣어 준다.
+            else:
+                sequence_index.extend([dictionary[UNK]])
+        # 문장 제한 길이보다 길어질 경우 뒤에 토큰을 자르고 있다.
+        if len(sequence_index) > MAX_SEQUENCE:
+            sequence_index = sequence_index[:MAX_SEQUENCE]
+        # 하나의 문장에 길이를 넣어주고 있다.
+        sequences_length.append(len(sequence_index))
+        # max_sequence_length보다 문장 길이가
+        # 작다면 빈 부분에 PAD(0)를 넣어준다.
+        sequence_index += (MAX_SEQUENCE - len(sequence_index)) * [dictionary[PAD]]
+        # 인덱스화 되어 있는 값을
+        # sequences_input_index에 넣어 준다.
+        sequences_input_index.append(sequence_index)
+    # 인덱스화된 일반 배열을 넘파이 배열로 변경한다.
+    # 이유는 텐서플로우 dataset에 넣어 주기 위한
+    # 사전 작업이다.
+    # 넘파이 배열에 인덱스화된 배열과
+    # 그 길이를 넘겨준다.
+    return np.asarray(sequences_input_index), sequences_length
+```
+- 함수를 보면 우선 2개의 인자를 받는데, 하나는 전처리할 데이터이고, 나머지 하나는 단어 사전이다. 이렇게 받은 입력 데이터를 대상으로 전처리를 진행하는데, 단순히 띄어쓰기를 기준으로 토크나이징한다.
+- 전체적인 전처리 과정을 설명하면 우선 정규 표현식 라이브러리를 이용해 특수문자를 모두 제거한다. 다음으로 각 단어를 단어 사전을 이용해 단어 인덱스로 바꾸는데, 만약 어떤 단어가 단어 사전에 포함돼 있지 않다면 `UNK`토큰을 넣는다(참고로 앞에서 `UNK` 토큰의 인덱스 값은 3으로 설정했다). 이렇게 모든 단어를 인덱스로 바꾸고 나면 모델에 적용할 최대 길이보다 긴 문장의 경우 잘라야 한다. 만약 최대 길이보다 짧은 문장인 경우에는 문장의 뒷부분에 패딩 값을 넣는다. 최대길이가 5라고 가정하고 다음 예시를 참조하자.
+  - 인코더 최대 길이보다 긴 경우: "안녕 우리 너무 오랜만에 만난거 같다."
+  - 인코더 최대 길이보다 긴 경우 입력값: "안녕, 우리, 너무, 오랜만에, 만난거"
+- 위와 같이 최대 길이보다 긴 경우 마지막 단어인 "같다."가 생략된 입력값이 만들어진다. 
+  - 인코더 최대 길이보다 짧은 경우: "안녕"
+  - 인코더 최대 길이보다 짧은 입력값: "안녕,\<PAD\>,\<PAD\>,\<PAD\>"
+- 위와 같이 최대 길이보다 짧은 단어는 최대 길이만큼 모두 패드로 채워진다.
+- 함수의 리턴값을 보면 2개의 값이 반환되는 것을 확인할 수 있는데, 하나는 앞서 전처리한 데이터이고 나머지 하나는 패딩 처리하기 전의 각 문장의 실제 길이를 담고 있는 리스트다. 이렇게 두 개의 값을 리턴하면서 함수가 끝난다.
+- 이제 디코더 부분에 필요한 전처리 함수를 만들면 된다. 인코더 부분과는 다르게 디코더에는 두 가지 전처리 함수가 사용된다. 디코더의 입력으로 사용될 입력값을 만드는 전처리 함수와 디코더의 결과로 학습을 위해 필요한 라벨인 타깃값을 만드는 전처리 함수다. 예를 들면, "그래 오랜만이야"라는 문장을 전처리하면 다음과 같이 두 개의 값을 만들어야 한다. 
+  - 디코더 입력값: "\<SOS\>,그래, 오랜만이야.\<PAD\>"
+  - 디코더 타깃값: "그래, 오랜만이야.\<END\>,\<PAD\>"
+- 위와 같이 입력값으로 시작 토큰이 앞에 들어가 있고 타깃값은 문장 끝에 종료 토큰이 들어가 있어야 한다. 그리고 예시의 단어는 실제로는 각 단어의 인덱스 값으로 만든다. 
+- 디코더의 입력값을 만드는 함수를 살펴보자.
+
+```python
+def dec_output_processing(value, dictionary, tokenize_as_morph=False):
+    # 인덱스 값들을 가지고 있는
+    # 배열이다.(누적된다)
+    sequences_output_index = []
+    # 하나의 디코딩 입력 되는 문장의
+    # 길이를 가지고 있다.(누적된다)
+    sequences_length = []
+    # 형태소 토크나이징 사용 유무
+    if tokenize_as_morph:
+        value = prepro_like_morphlized(value)
+    # 한줄씩 불어온다.
+    for sequence in value:
+        # FILTERS = "([~.,!?\"':;)(])"
+        # 정규화를 사용하여 필터에 들어 있는
+        # 값들을 "" 으로 치환 한다.
+        sequence = re.sub(CHANGE_FILTER, "", sequence)
+        # 하나의 문장을 디코딩 할때 가지고
+        # 있기 위한 배열이다.
+        sequence_index = []
+        # 디코딩 입력의 처음에는 START가 와야 하므로
+        # 그 값을 넣어 주고 시작한다.
+        # 문장에서 스페이스 단위별로 단어를 가져와서 딕셔너리의
+        # 값인 인덱스를 넣어 준다.
+        sequence_index = [dictionary[STD]] + [dictionary[word] if word in dictionary else dictionary[UNK] for word in sequence.split()]
+        # 문장 제한 길이보다 길어질 경우 뒤에 토큰을 자르고 있다.
+        if len(sequence_index) > MAX_SEQUENCE:
+            sequence_index = sequence_index[:MAX_SEQUENCE]
+        # 하나의 문장에 길이를 넣어주고 있다.
+        sequences_length.append(len(sequence_index))
+        # max_sequence_length보다 문장 길이가
+        # 작다면 빈 부분에 PAD(0)를 넣어준다.
+        sequence_index += (MAX_SEQUENCE - len(sequence_index)) * [dictionary[PAD]]
+        # 인덱스화 되어 있는 값을
+        # sequences_output_index 넣어 준다.
+        sequences_output_index.append(sequence_index)
+    # 인덱스화된 일반 배열을 넘파이 배열로 변경한다.
+    # 이유는 텐서플로우 dataset에 넣어 주기 위한
+    # 사전 작업이다.
+    # 넘파이 배열에 인덱스화된 배열과 그 길이를 넘겨준다.
+    return np.asarray(sequences_output_index), sequences_length
+```
+
+- 함수의 구조는 전체적으로 인코더의 입력값을 만드는 전처리 함수와 동일하다. 한 가지 다른점은 각 문장의 처음에 시작 토큰을 넣어준다는 점이다. 디코더 역시 데이터와 단어 사전을 인자로 받고 전처리한 데이터와 각 데이터 문장의 실제 길이의 리스트를 리턴한다. 
+- 디코더의 타깃값을 만드는 전처리 함수도 이와 거의 유사하다.
+
+```python
+def dec_target_processing(value, dictionary, tokenize_as_morph=False):
+    # 인덱스 값들을 가지고 있는
+    # 배열이다.(누적된다)
+    sequences_target_index = []
+    # 형태소 토크나이징 사용 유무
+    if tokenize_as_morph:
+        value = prepro_like_morphlized(value)
+    # 한줄씩 불어온다.
+    for sequence in value:
+        # FILTERS = "([~.,!?\"':;)(])"
+        # 정규화를 사용하여 필터에 들어 있는
+        # 값들을 "" 으로 치환 한다.
+        sequence = re.sub(CHANGE_FILTER, "", sequence)
+        # 문장에서 스페이스 단위별로 단어를 가져와서
+        # 딕셔너리의 값인 인덱스를 넣어 준다.
+        # 디코딩 출력의 마지막에 END를 넣어 준다.
+        sequence_index = [dictionary[word] if word in dictionary else dictionary[UNK] for word in sequence.split()]
+        # 문장 제한 길이보다 길어질 경우 뒤에 토큰을 자르고 있다.
+        # 그리고 END 토큰을 넣어 준다
+        if len(sequence_index) >= MAX_SEQUENCE:
+            sequence_index = sequence_index[:MAX_SEQUENCE - 1] + [dictionary[END]]
+        else:
+            sequence_index += [dictionary[END]]
+        # max_sequence_length보다 문장 길이가
+        # 작다면 빈 부분에 PAD(0)를 넣어준다.
+        sequence_index += (MAX_SEQUENCE - len(sequence_index)) * [dictionary[PAD]]
+        # 인덱스화 되어 있는 값을
+        # sequences_target_index에 넣어 준다.
+        sequences_target_index.append(sequence_index)
+    # 인덱스화된 일반 배열을 넘파이 배열로 변경한다.
+    # 이유는 텐서플로우 dataset에 넣어 주기 위한 사전 작업이다.
+    # 넘파이 배열에 인덱스화된 배열과 그 길이를 넘겨준다.
+    return np.asarray(sequences_target_index)
+```
+
+- 위의 디코더의 입력값을 만드는 함수와의 차이점은 문장이 시작하는 부분에 토큰을 넣지 않고 마지막에 종료 토큰을 넣는다는 점이다. 그리고 리턴값이 하나만 있는데, 실제 길이를 담고 있는 리스트의 경우 여기서는 따로 만들지 않았다.
+
+#### preprocess.ipynb
+
+- `preprocess.ipynb` 파일의 내용은 다음과 같다. 이 파일에서는 앞서 구현한 `preprocess.py`의 함수를 이용해 학습 데이터를 준비한다.
+
+```python
+from preprocess import *
+
+PATH = 'data_in/ChatBotData.csv_short'
+VOCAB_PATH = 'data_in/vocabulary.txt'
+```
+
+- 먼저 `preprocess` 모듈에서 모든 함수를 불러오고 학습할 데이터 경로와 저장할 단어사전의 경로를 선언한다. 
+
+```python
+inputs, outputs = load_data(PATH)
+char2idx, idx2char, vocab_size = load_vocabulary(PATH, VOCAB_PATH, tokenize_as_morph=False)
+```
+
+- 앞서 구현한 `load_data` 함수로 학습할 데이터를 불러온다. 그리고 `load_vocabulary` 함수로 단어 사전을 `char2idx`, `idx2char`로 만든다. `tokenize_as_morph` 파라미터를 통해 문장 토크나이즈를 띄어쓰기 단위로 할지 형태소 단위로 할지 결정한다. `tokenize_as_morph`를 False로 설정하면 띄어쓰기 단위로 토크나이즈 한다. 
+
+```python
+index_inputs, input_seq_len = enc_processing(inputs, char2idx, tokenize_as_morph=False)
+index_outputs, output_seq_len = dec_output_processing(outputs, char2idx, tokenize_as_morph=False)
+index_targets = dec_target_processing(outputs, char2idx, tokenize_as_morph=False)
+```
+
+- 이렇게 단어 사전까지 만들면 `enc_processing`과 `dec_output_processing`, `dec_target_processing` 함수를 통해 모델에 학습할 인덱스 데이터를 구성한다. 
+
+```python
+data_configs = {}
+data_configs['char2idx'] = char2idx
+data_configs['idx2char'] = idx2char
+data_configs['vocab_size'] = vocab_size
+data_configs['pad_symbol'] = PAD
+data_configs['std_symbol'] = STD
+data_configs['end_symbol'] = END
+data_configs['unk_symbol'] = UNK
+```
+
+- 인덱스 데이터를 모두 구성하고 나면 모델 학습할 때와 모델 추론에 활용하기 위한 단어 사전을 저장할 수 있도록 구성한다. 여기서는 단어 사전과 특별한 토큰들을 각각 정의해서 딕셔너리 객체에 저장한다.
+
+```python
+DATA_IN_PATH = './data_in/'
+TRAIN_INPUTS = 'train_inputs.npy'
+TRAIN_OUTPUTS = 'train_outputs.npy'
+TRAIN_TARGETS = 'train_targets.npy'
+DATA_CONFIGS = 'data_configs.json'
+
+np.save(open(DATA_IN_PATH + TRAIN_INPUTS, 'wb'), index_inputs)
+np.save(open(DATA_IN_PATH + TRAIN_OUTPUTS , 'wb'), index_outputs)
+np.save(open(DATA_IN_PATH + TRAIN_TARGETS , 'wb'), index_targets)
+
+json.dump(data_configs, open(DATA_IN_PATH + DATA_CONFIGS, 'w'))
+```
+
+- 각 인덱스 데이터와 단어사전을 구성한 딕셔너리 객체를 `numpy`와 `json` 형식으로 저장한다. 
+- 이렇게 하면 모델을 학습할 준비를 마치게 된다. 이제 본격적으로 `seq2seq` 모델을 학습해 보자. 
+
+#### seq2seq.ipynb
+
+- 그럼 모델에 대해 알아보자. 우선 모델을 구현하기 위한 모듈을 불러오자.
+
+```python
+import tensorflow as tf
+import numpy as np
+import os
+
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+import matplotlib.pyplot as plt
+
+from preprocess import *
+```
+
+- 모델 구현을 진행하는 데는 텐서플로와 넘파이를 주로 활용한다. 운영체제의 기능을 사용하기 위한 `os`, 빠른 학습 중지와 모델 체크포인트를 위한 케라스 API를 사용하기 위해 불러오고 있다. 
+- 학습 시각화를 위한 시각화 함수를 만들어 보자.
+
+```python
+def plot_graphs(history, string):
+    plt.plot(history.history[string])
+    plt.plot(history.history['val_'+string], '')
+    plt.xlabel("Epochs")
+    plt.ylabel(string)
+    plt.legend([string, 'val_'+string])
+    plt.show()
+```
+
+- 에폭당 정확도와 손실 값을 `matplotlib`을 통해 시각화하는 함수를 만들었다. 이 함수를 통해 직관적으로 학습 상태를 파악할 수 있다.
+- 학습 데이터 경로를 정의하고 코드 작성의 효율성을 높여보자.
+
+```python
+DATA_IN_PATH = './data_in/'
+DATA_OUT_PATH = './data_out/'
+TRAIN_INPUTS = 'train_inputs.npy'
+TRAIN_OUTPUTS = 'train_outputs.npy'
+TRAIN_TARGETS = 'train_targets.npy'
+DATA_CONFIGS = 'data_configs.json'
+```
+
+- `process.ipynb`에서 만든 npy 데이터와 입력에 필요한 파일이 존재하는 `data_in`, 모델 결과를 저장하는 `data_out`을 선언했다.
+- 다음으로 책 전체에서 사용되는 랜덤 시드값을 선언한다.
+
+```python
+SEED_NUM = 1234
+tf.random.set_seed(SEED_NUM)
+```
+
+- 미리 전처리된 학습에 필요한 데이터와 설정값을 불러오자.
+
+```python
+index_inputs = np.load(open(DATA_IN_PATH + TRAIN_INPUTS, 'rb'))
+index_outputs = np.load(open(DATA_IN_PATH + TRAIN_OUTPUTS , 'rb'))
+index_targets = np.load(open(DATA_IN_PATH + TRAIN_TARGETS , 'rb'))
+prepro_configs = json.load(open(DATA_IN_PATH + DATA_CONFIGS, 'r'))
+```
+
+- 인코더의 입력, 디코더의 입력, 디코더의 타깃값을 얻기 위해 앞서 전처리 작업을 하고 저장한 `numpy`와 `json` 파일을 `np.load`와 `json.load`를 통해 불러왔다.
+- 앞에서도 설명했지만 인코더의 입력, 디코더의 입력, 디코더의 타깃값을 가져왔으므로 인코더는 최대 길이만큼 \<PAD\>가 붙고, 디코더 입력의 앞에는 \<SOS\>가, 디코더 타깃값 끝에는 \<END\>가 붙은 형태로 만들어졌다는 점을 한번 생각하고 다음으로 진행하자.
+- 함수를 통과한 값들이 예상한 크기와 같은지 확인해 보자.
+
+```python
+# Show length
+print(len(index_inputs),  len(index_outputs), len(index_targets))
+```
+
+```
+20 20 20
+```
+
+- 배열의 크기를 확인하는 함수를 통해 배열의 크기를 확인했다. 만약 앞에서 만들어 둔 `enc_processing`, `dec_output_processing`, `dec_target_processing` 함수를 통해 데이터의 내용을 확인하고 싶다면 `index_inputs`, `index_outputs`, `index_targets`를 출력해 보자.
+- 모델을 구성하는 데 필요한 값을 선언해 보자.
+
+```python
+MODEL_NAME = 'seq2seq_kor'
+BATCH_SIZE = 2
+MAX_SEQUENCE = 25
+EPOCH = 30
+UNITS = 1024
+EMBEDDING_DIM = 256
+VALIDATION_SPLIT = 0.1 
+
+char2idx = prepro_configs['char2idx']
+idx2char = prepro_configs['idx2char']
+std_index = prepro_configs['std_symbol']
+end_index = prepro_configs['end_symbol']
+vocab_size = prepro_configs['vocab_size']
+```
+- 배치 크기(BATCH_SIZE), 에폭 횟수(EPOCH), 순환 신경망의 결과 차원(UNITS), 임베딩 차원(EMBEDDING_DIM)과 전체 데이터셋 크기에서 평가셋의 크기 비율(VALIDATION_SPLIT) 등을 선언하고 사용할 것이다. 에폭(EPOCH)는 전체 학습 데이터를 전체 순회하는 것이 한 번, 즉 1회다. 전체 데이터셋 크기에서 평가셋의 크기 비율(VALIDATION_SPLIT)은 데이터의 전체 크기대비 평가셋의 비율을 의미한다. 예를 들어, 전체 데이터셋이 100개의 셋으로 구성돼 있다고 했을 때 0.1은 10개를 의미한다. 이어서 `preprocess.ipynb`에서 만들어 둔, 토큰을 인덱스로 만드는 함수와 인덱스를 토큰으로 변환하는 함수, 특수 토큰인 시작 토큰과 끝 토큰 값, 사전의 크기를 차례로 불러왔다. `preprocess.ipynb`에서 만들어 둔 값들은 모델을 만들 때 유용하게 쓰이는 값이다. 이 뒤에 모델 구현을 진행하면서 미리 만들어 둔 값들이 어디에 쓰이는지 확인하는 것도 공부에 도움이 될 것이다. 
+- 앞에서 설명했듯이 모델은 시퀀스 투 시퀀스 모델을 기반으로 만들 것이다. 해당 모델의 중간에 사용되는 신경망으로는 순환 신경망을 사용하는데, 다양한 종류의 순환 신경망 중에서 여기에서는 조경현 교수님이 2014년에 발표한 `GRU(Gated Recurrent Unit)` 모델을 사용하겠다.
+- 시퀀스 투 시퀀스 모델의 인코더부터 실펴보자.
+
+```python
+lass Encoder(tf.keras.layers.Layer):
+    def __init__(self, vocab_size, embedding_dim, enc_units, batch_sz):
+        super(Encoder, self).__init__()
+        self.batch_sz = batch_sz
+        self.enc_units = enc_units
+        self.vocab_size = vocab_size 
+        self.embedding_dim = embedding_dim          
+        
+        self.embedding = tf.keras.layers.Embedding(self.vocab_size, self.embedding_dim)
+        self.gru = tf.keras.layers.GRU(self.enc_units,
+                                       return_sequences=True,
+                                       return_state=True,
+                                       recurrent_initializer='glorot_uniform')
+
+    def call(self, x, hidden):
+        x = self.embedding(x)
+        output, state = self.gru(x, initial_state = hidden)
+        return output, state
+
+    def initialize_hidden_state(self, inp):
+        return tf.zeros((tf.shape(inp)[0], self.enc_units))
+```
