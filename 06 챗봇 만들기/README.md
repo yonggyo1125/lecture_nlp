@@ -1042,3 +1042,12 @@ history = model.fit([index_inputs, index_outputs], index_targets,
 ```python
 plot_graphs(history, 'accuracy')
 ```
+
+![스크린샷 2025-03-30 오후 4 11 20](https://github.com/user-attachments/assets/22c5991c-41a5-41c8-80ef-722c54a3f71a)
+
+
+![스크린샷 2025-03-30 오후 4 11 42](https://github.com/user-attachments/assets/3f0e1b57-5ce2-4a95-9454-7dbc24ed0632)
+
+
+
+
