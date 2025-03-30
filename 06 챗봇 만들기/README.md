@@ -1412,3 +1412,25 @@ def point_wise_feed_forward_network(**kargs):
 - 리지듀얼 커넥션(Residual Connection)은 간단하게 다음 그림에 나오는 방법으로 연산을 수행한다. 
 
 ![스크린샷 2025-03-30 오후 9 37 14](https://github.com/user-attachments/assets/ad9b0ab7-2ee4-444d-ab4d-f614cd407216)
+
+- 위 그림과 같이 입력 정보 x가 있고 네트워크 레이어를 거쳐 나온 정보 F(x)가 있다고 하면 이 두 정보를 더해 앞에 있던 정보 x를 보존하게 된다. 특별히 트랜스포머 네트워크에서는 리지듀얼 커넥션을 한 다음, 레이어에 대한 값을 노멀라이즈하는 레이어 노멀라이제이션을 수행한다.
+- 이 같은 방식으로 다음과 같이 구현할 수 있다. 
+
+```python
+self.ffn = point_wise_feed_forward_network(**kargs)
+self.layernorm2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+
+ffn_output = self.ffn(out1)  # (batch_size, input_seq_len, d_model)
+ffn_output = self.dropout2(ffn_output)
+out2 = self.layernorm2(out1 + ffn_output)  # (batch_size, input_seq_len, d_model)
+```
+
+- 위 코드는 인코데 레이어에서 리지듀얼 커넥션을 수행하는 부분을 보여준다. 먼저 연산할 레이어 피드 포워드 네트워크와 레이어 노멀라이즈를 각각 생성한다. 여기서 레이어 노멀라이즈는 각 레이어별 뉴런을 노멀라이즈하는 역할이라고 이해하면 된다. 피드 포워드 네트워크를 만들기 위해서는 앞서 구현한 `point_wise_feed_forward_netword`를 통해 네트워크를 생성한다. 그리고 레이어 노멀라이즈를 위해 `tf.keras.layers.LayerNormalization`을 생성한다. 이렇게 생성한 레이어들을 `self.ffn`, `self.layernorm2`에 할당한다. 여기서 `self.ffn`이 앞서 설명한 F(x)에 해당한다. 
+- 할당한 각 레이어를 가지고 리지듀얼 커넥션 연산을 수행하는 방법을 보자. 입력 벡터 `out1`을 먼저 `self..ffn`을 통해 피드 포워드 연산을 하게 해서 ffn_output으로 할당한다. 그다음 입력 벡터 `out1`과 피드 포워드 네트워크를 거쳐 나온 `ffn_output`을 더해 리지듀얼 커넥션을 수행한다. 이어서 리지듀얼 컨넥션을 한 값을 `self.layernorm2`에 입력해 레이어 노멀라이즈 연산을 수행해 `out2`에 할당한다. 
+- 이렇게 레이어 노멀라이제이션 함수까지 정의했다면 하나의 모듈인 리지듀얼 커넥션과 레이어 노멀라이제이션을 사용할 수 있게 된다. 이 함수는 앞에서 모델을 나타낸 그림 6.19 '트린스포머 네트워크의 전체 구조'에서 `Add & Norm`에 해당하는 부분으로 자주 사용된다. 
+
+#### 포지션 인코딩
+
+- 앞의 순환 신경망과 달리 트랜스포머 모델은 입력을 단어 하나하나 순차적으로 넣지 않고 한번에 넣게 된다. 따라서 입력 시퀀스 정보에 대한 순서 정보를 부가적으로 주입할 필요가 있다. 포지션 인코딩(Positional Encoding)은 트랜스포머 모델에 순서 정보갸ㅏ 반영되지 않는 문제를 해결하기 위해 사용한 기법이다. 
+- 순서 정보를 주입하는 방법으로 여러 가지 방법이 있지만 논문에서 선택한 방법은 아래의 함수 값을 입력값에 추가로 넣는 방법이다. 
+
