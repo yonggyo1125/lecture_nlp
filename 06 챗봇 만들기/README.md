@@ -1159,5 +1159,19 @@ index_targets = dec_target_processing(outputs, char2idx, tokenize_as_morph=True)
 
 ![스크린샷 2025-03-30 오후 5 01 25](https://github.com/user-attachments/assets/6a533818-7369-49c8-bb5e-597647acb3df)
 
+- 그림에 나온 각 모듈을 정리하면 구현해야 하는 모듈의 목록은 다음과 같다.
+  - 멀티 헤드 어텐션(Multi-head attention)
+  - 서브시퀀트 마스크 어텐션(Subsequent masked attention)
+  - 포지션-와이즈 피드 포워드 네트워크(Position-wise feed forward network)
+  - 리지듀얼 커넥션(Residual connection)
+- 위와 같은 총 4가지 모듈을 직접 만들고 구현해야 한다. 이러한 모듈을 정의한 후 각 모듈을 사용해 인코더와 디코더 모듈을 만들어 보겠다. 우선 멀티 헤드 어텐션에 대해 알아보자.
+
+#### 멀티 헤드 어텐션
+
+- 앞에서 설명한 셀프 어텐션 방식을 기반으로 구성된 멀티 헤드 어텐션(Multi-head attention)을 알아보자. 멀티 헤드 어텐션이란 간단하게 내적 어텐션 구조가 중첩된 형태다.
+- 이 모듈은 앞서 설명한 기본적인 내적 어텐션, 순방향 어텐션 마스크, 멀티 헤드 어텐션의 세개의 부분으로 나눠서 구현하겠다. 우선 내적 어텐션을 알아보자.
+
+##### 스케일 내적 어텐션
+
 
 
