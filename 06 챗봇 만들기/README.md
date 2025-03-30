@@ -1473,3 +1473,85 @@ def positional_encoding(position, d_model):
   
 ![스크린샷 2025-03-30 오후 10 01 40](https://github.com/user-attachments/assets/5ef99f6b-bff1-48bd-8221-4795367e0ef9)
 
+- 인코더 모듈은 멀티 헤드 어텐션 레이어와 피드 포워드 네트워크로 한 레이어를 구성하고, 각 레이어에는 리지듀얼 커넥션이 함께 적용돼 있다. 앞서 구현한 모듈을 통해 인코더 모듈을 구현해 보자.
+
+```python
+class EncoderLayer(tf.keras.layers.Layer):
+    def __init__(self, **kargs):
+        super(EncoderLayer, self).__init__()
+
+        self.mha = MultiHeadAttention(**kargs)
+        self.ffn = point_wise_feed_forward_network(**kargs)
+
+        self.layernorm1 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+
+        self.dropout1 = tf.keras.layers.Dropout(kargs['rate'])
+        self.dropout2 = tf.keras.layers.Dropout(kargs['rate'])
+
+    def call(self, x, mask):
+        attn_output, _ = self.mha(x, x, x, mask)  # (batch_size, input_seq_len, d_model)
+        attn_output = self.dropout1(attn_output)
+        out1 = self.layernorm1(x + attn_output)  # (batch_size, input_seq_len, d_model)
+
+        ffn_output = self.ffn(out1)  # (batch_size, input_seq_len, d_model)
+        ffn_output = self.dropout2(ffn_output)
+        out2 = self.layernorm2(out1 + ffn_output)  # (batch_size, input_seq_len, d_model)
+
+        return out2
+```
+
+- 인코더 레이어는 크게 4가지 레이어로 구성한다. 
+  - 멀티 헤드 어텐션
+  - 포지션 와이드 피드 포워드 네트워크
+  - 레이어 노멀라이제이션
+  - 드롭아웃
+- 각 레이어에 대해서는 이미 앞에서 다뤘다. 이제 앞에서 배운 모듈들을 인코더 레이어에서 활용하게 해보자.
+- `__init__` 함수부터 살펴보자. 먼저 `kargs` 파라미터를 살펴보면 멀티 헤드 어텐션에 적용될 출력 차원 수 `d_model`과 헤드 수 `num_heads`를 적용한다. 그리고 포지션 와이즈 피드 포워드 네트워크의 차원 수 d<sup>ff</sup>를 적용한다. 이 세 파라미터로 필요한 레이어의 출력 차원 수를 정의한다. 이 함수에서는 앞에서 언급한 4가지에 대한 레이어를 생성하는 역할을 하게 될 것이다. `MultiHeadAttention` 클래스를 활용해 멀티 헤드 어텐션 레이어를 생성하고, `position_wise_feed_forward_network`를 활용해 포지션 와이즈 피드 포워드 네트워크를 생성한다. 그리고 나머지 `tf.keras.layers.LayerNormalization`과 `tf.keras.layers.Dropout`을 이용해 레이어 노멀라이제이션과 드롭아웃 레이어를 생성한다. 이렇게 생성한 레이어들을 `call` 함수에서 구체적으로 연산할 수 있도록 구현해보자.
+- `call` 함수에서는 크게 입력 벡터인 `x`와 패딩 마스크 `mask`를 입력 파라미터로 정의한다. 입력한 파라미터는 먼저 멀티 헤드 어텐션 레이어인 `self.mha`를 거친다. 여기서는 셀프 어텐션을 하기 때문에 멀티 헤드 어텐션에 들어가는 모든 key, query, value는 동일하다. 그리고 리지듀얼 커넥션을 하기 위해 멀티 헤드 어텐션에서 나온 출력값 `attn_output`과 입력값 `x`를 더하고 `self.layernorm1`을 통해 노멀라이제이션을 수행한다. 노멀라이제이션까지 연산을 마친 결과값은 `out1`에 할당한다. 
+- 멀티 헤드 어텐션을 하고 나면 포지션 와이즈 피드 포워드 네트워크를 연산한다. 앞서 연산한 방식과 똑같이 앞에서 연산을 수행한 변수 `out1`을 입력으로 `self.ffn`을 거쳐 `ffn_output`으로 출력하게 한다. 그런 다음 `out1`과 `ffn_output`을 더해 리지듀얼 커넥션을 하고 다시 레이어 노멀라이제이션을 한다. 이렇게 노멀라이제이션한 값은 `out2`에 할당하고 인코더 레이어에 출력하게 된다.
+- 추가로 위의 전체 과정에서 `dropout`은 멀티 헤드 어텐션과 포지션 와이드 피드 포워드 네트워크 연산을 할 떄 한 번씩 적용해 모델에 제너럴라이제이션을 할 수 있게 한다. 
+- 이렇게 인코더를 구현하면 여러 개의 인코더 레이어를 쌓을 수 있게 준비된 것이다. 이제 `Encoder`라는 클래스로 인코더 레이어를 쌓고, 워드 임베딩과 포지션 임베딩 정보를 받아 텍스트에 대한 컨텍스트 정보를 만들어 보자.
+
+```python
+class Encoder(tf.keras.layers.Layer):
+    def __init__(self, **kargs):
+        super(Encoder, self).__init__()
+
+        self.d_model = kargs['d_model']
+        self.num_layers = kargs['num_layers']
+
+        self.embedding = tf.keras.layers.Embedding(kargs['input_vocab_size'], self.d_model)
+        self.pos_encoding = positional_encoding(kargs['maximum_position_encoding'], 
+                                                self.d_model)
+
+
+        self.enc_layers = [EncoderLayer(**kargs) 
+                           for _ in range(self.num_layers)]
+
+        self.dropout = tf.keras.layers.Dropout(kargs['rate'])
+
+    def call(self, x, mask):
+
+        seq_len = tf.shape(x)[1]
+
+        # adding embedding and position encoding.
+        x = self.embedding(x)  # (batch_size, input_seq_len, d_model)
+        x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
+        x += self.pos_encoding[:, :seq_len, :]
+
+        x = self.dropout(x)
+
+        for i in range(self.num_layers):
+            x = self.enc_layers[i](x, mask)
+
+        return x  # (batch_size, input_seq_len, d_model)
+```
+
+- 전체적으로 Encoder 클래스에서는 인코더 레이어, 워드 임베딩, 포지션 인코더 등으로 구성되어 연산을 수행한다. 여기서 인코더 레이어는 여러 개의 레이어로 구성할 수 있다. 
+- `__init__` 함수부터 살펴보자. 입력 파라미터부터 살펴보면 인코더와 관련된 파라미터인 `kargs`가 먼저 있다. `kargs`를 살펴보면 인코더 레이어 수인 `num_layers`와 워드 임베딩과 포지션 임베딩 차원 수를 결정하는 `d_model`이 있다. 그리고 워드 임베딩의 사전 수를 입력하는 `input_vocab_size`, 포지션 인코더의 최대 시퀀스 길이를 지정하는 `maximum_position_encoding`이 있다. 
+- 이 파라미터로 인코더를 구성하면 된다. 먼저 워드 임베딩부터 살펴보면 `tf.keras.layers.Embedding`으로 워드 임베딩 레이어를 생성해 `self.embedding`에 할당한다. 그리고 `positional_encoding` 함수를 통해 포지션 임베딩을 `self.pos_encoding`에 할당한다. 가장 중요한 인코더 레이어는 레이어 개수만큼 인코더 레이어를 생성해 `self.enc_layer`에 할당한다. 마지막으로 드롭아웃 레이어를 생성한다.
+- `__init__` 함수에서 생성한 각 레이어를 가지고 `call` 함수에서 인코더 연산을 구현해 보자. 먼저 입력한 벡터에 대한 시퀀스 길이를 받는다. 이 변수는 포지션 임베딩을 위해 만든 것이다. 포지션 임베딩의 경우 행렬의 크기가 고정돼 있고, 워드 임베딩의 경우 입력 길이에 따라 가변적이다. 따라서 포지션 임베딩의 경우 워드 임베딩과 더할 경우 워드 임베딩의 길이에 맞게 행렬 크기를 조절해야 한다. 이때 시퀀스 길이를 활용하게 된다.
+- 그 다음 `self.embedding`을 통해 워드 임베딩을 할당받는다. 임베딩이 할당된 후에 임베딩 차원수의 제곱근만큼에 대한 가중치를 곱한다. 이 연산 과정은 각 워드 임베딩에 대한 스케일을 맞추기 위한 것으로 보면 된다. 가중치 값이 적용된 워드 임베딩은 `self.pos_encoding`을 통해 포지션 임베딩 정보를 더하게 된다.
+- 워드 임베딩에 포지션 임베딩을 더했다면 이제 인코더 레이어로 입력한다. 입력하기 전에 `self.dropout`을 통해 먼저 드롭아웃을 적용하고, 인코더 레이어에 순차적으로 연산을 진행한다. 앞서 인코더 레이어를 배열에 생성해 뒀기 때문에 반복문을 통해 레이어 연산을 거치게 한다. 
+- 이제 인코더 부분의 구현이 모두 끝났다. 이제 디코더 모듈을 정의해 보자.
