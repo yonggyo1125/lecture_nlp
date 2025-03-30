@@ -1177,3 +1177,7 @@ index_targets = dec_target_processing(outputs, char2idx, tokenize_as_morph=True)
 - 앞에서 다룬 '딥러닝 자연어 처리 아주 좋아요'라는 문장을 다시 예로 들어보자.
 
 
+![스크린샷 2025-03-30 오후 8 03 03](https://github.com/user-attachments/assets/6b94e0fc-3232-43bb-a7fd-d0358f34d491)
+
+
+
