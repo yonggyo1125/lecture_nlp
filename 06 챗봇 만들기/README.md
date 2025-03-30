@@ -1393,4 +1393,5 @@ class MultiHeadAttention(tf.keras.layers.Layer):
 
 - 트랜스포머 네트워크에서는 셀프 어텐션 레이어를 거친 다음 피드 포워드 네트워크를 거치게 돼 있다. 이 네트워크는 한 문장에 있는 단어 토큰 벡터 각각에 대해 연산하는 네트워크로서 논문에서는 포지션-와이즈 피드 포워드 네트워크(Position-wise Feedforward Network)라 표현한다. 
 
+![스크린샷 2025-03-30 오후 9 31 34](https://github.com/user-attachments/assets/872fab99-fcce-44e6-8d11-7c6762127c6d)
 
