@@ -1185,3 +1185,10 @@ index_targets = dec_target_processing(outputs, char2idx, tokenize_as_morph=True)
 ![스크린샷 2025-03-30 오후 8 14 31](https://github.com/user-attachments/assets/482ff98e-bc07-4b1b-875f-eca896e30d7c)
 
 - 위 수식처럼 `query`와 `key`를 내적한 값에 `key` 벡터의 차원 수를 제곱근한 값으로 나눈 후 소프트맥스 함수를 적용한다. 여기서 d<sub>k</sub>는 key 벡터의 차원 수를 의미한다. 전체적인 스케일 내적 어텐션을 그림으로 확인해 보자.
+
+
+![스크린샷 2025-03-30 오후 8 17 22](https://github.com/user-attachments/assets/39480ea0-e069-491c-bcab-6af2504bbc22)
+
+
+
+
