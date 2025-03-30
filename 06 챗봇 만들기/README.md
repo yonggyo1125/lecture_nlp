@@ -1395,3 +1395,19 @@ class MultiHeadAttention(tf.keras.layers.Layer):
 
 ![스크린샷 2025-03-30 오후 9 31 34](https://github.com/user-attachments/assets/872fab99-fcce-44e6-8d11-7c6762127c6d)
 
+- 위 수식과 같이 네트워크를 구성하는 데 두 개의 리니어 레이어를 거치고 그 사이 활성화 함수로 `Relu` 함수를 활용한다. 이 네트워크의 구현은 다음과 같다.
+
+```python
+def point_wise_feed_forward_network(**kargs):
+    return tf.keras.Sequential([
+      tf.keras.layers.Dense(kargs['dff'], activation='relu'),  # (batch_size, seq_len, dff)
+      tf.keras.layers.Dense(kargs['d_model'])  # (batch_size, seq_len, d_model)
+    ])
+```
+
+- 여기서는 피드 포워드 네트워크의 연산을 하나로 묶어 주기 위해 `tf.keras.Sequential`을 활용했다. `Sequential` 안의 연산은 리스트에 선언한 순서대로 진행한다고 생각하면 된다. 먼저 입력 시퀀스 벡터를 받아 첫 리니어 레이어를 `Dense`를 통해 거치게 한다. 이 레이어에 대해서만 활성화 함수 `relu`를 정의하고 레이어 차원에 대한 설정을 인자로 지정한다. 첫 레이어를 거치고 다시 `Dense`를 거치면 피드 포워드에 대한 네트워크 연산은 마치게 된다. 이 연산은 `Encoder`, `Decoder`에서 구현되는 것을 다시 확인할 수 있다. 
+
+#### 리지듀얼 커넥션
+
+- 리지듀얼 커넥션(Residual Connection)은 간단하게 다음 그림에 나오는 방법으로 연산을 수행한다. 
+
