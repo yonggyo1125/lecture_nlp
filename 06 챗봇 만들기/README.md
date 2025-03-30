@@ -1116,3 +1116,9 @@ print(' '.join([idx2char[str(t)] for t in predict_tokens]))
 
 
 
+![스크린샷 2025-03-30 오후 4 40 59](https://github.com/user-attachments/assets/94ad64ec-97c8-4fd9-b11b-f1ead0cba9a6)
+
+
+![스크린샷 2025-03-30 오후 4 41 08](https://github.com/user-attachments/assets/1d6872a1-ea30-415d-b252-521b4c591718)
+
+
