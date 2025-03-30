@@ -1133,4 +1133,26 @@ print(' '.join([idx2char[str(t)] for t in predict_tokens]))
 
 ![스크린샷 2025-03-30 오후 4 52 48](https://github.com/user-attachments/assets/f52bc638-0300-462b-9cdb-02a39003bfeb)
 
+- 이제 챗봇 프로젝트를 본격적으로 구현해 보자. 프로젝트는 앞에서 살펴본 순환 신경망 기반 시퀀스 투 시퀀스 소스코드와 동일하게 구성한다. 기본적으로 이전 장과 동일한 부분에 대해서는 설명을 생략하고 바뀐 부분 위주로 설명하겠다.
 
+#### 데이터 전처리
+
+- 데이터 구성은 앞서 `preprocess.ipynb`를 통해 준비하면 된다. 이번에는 띄어쓰기가 아닌 형태소 단위인 토크나이즈하는 방식으로 전처리한다. 
+
+```python
+os.remove(VOCAB_PATH)
+```
+
+- 전처리 방식을 다르게 할 때는 `data_in` 폴더에 `vocabulary.txt` 파일이 존재하는지 확인하고, 파일이 존재하면 `rm` 명령어를 활용해 삭제하고 전처리를 진행한다.
+
+```python
+index_inputs, input_seq_len = enc_processing(inputs, char2idx, tokenize_as_morph=True)
+index_outputs, output_seq_len = dec_output_processing(outputs, char2idx, tokenize_as_morph=True)
+index_targets = dec_target_processing(outputs, char2idx, tokenize_as_morph=True)
+```
+
+- 앞서 `seq2seq` 모델에서 수행한 전처리와 다른 점은 `enc_processing`, `dec_output_processing`, `dec_target_processing` 함수의 `tokenize_as_morph` 파라미터를 True로 지정한다는 점이다.
+
+#### 모델 구현
+
+- 앞의 챗봇 프로젝트와 마찬가지로 모델은 `transformer.ipynb`에 구현돼 있다. 이제 모델의 각 부분을 하나씩 구현해 보겠다. 우선 앞에서 모델을 나타낸 그림을 통해 구현해야 하는 모듈로 어떤 것이 있는지 확인해 보자.
