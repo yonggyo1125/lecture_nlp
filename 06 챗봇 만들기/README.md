@@ -1156,3 +1156,8 @@ index_targets = dec_target_processing(outputs, char2idx, tokenize_as_morph=True)
 #### 모델 구현
 
 - 앞의 챗봇 프로젝트와 마찬가지로 모델은 `transformer.ipynb`에 구현돼 있다. 이제 모델의 각 부분을 하나씩 구현해 보겠다. 우선 앞에서 모델을 나타낸 그림을 통해 구현해야 하는 모듈로 어떤 것이 있는지 확인해 보자.
+
+![스크린샷 2025-03-30 오후 5 01 25](https://github.com/user-attachments/assets/6a533818-7369-49c8-bb5e-597647acb3df)
+
+
+
