@@ -829,7 +829,7 @@ vocab_size = prepro_configs['vocab_size']
 - 시퀀스 투 시퀀스 모델의 인코더부터 실펴보자.
 
 ```python
-lass Encoder(tf.keras.layers.Layer):
+class Encoder(tf.keras.layers.Layer):
     def __init__(self, vocab_size, embedding_dim, enc_units, batch_sz):
         super(Encoder, self).__init__()
         self.batch_sz = batch_sz
@@ -851,3 +851,8 @@ lass Encoder(tf.keras.layers.Layer):
     def initialize_hidden_state(self, inp):
         return tf.zeros((tf.shape(inp)[0], self.enc_units))
 ```
+
+- Encoder 클래스는 `Layer`를 상속받고 있으며, `__init__` 함수부터 설명하겠다. 임베딩 룩업 테이블 결과 `GRU`를 구성하기 위한 인자를 입력으로 받는다. 인자는 배치 크기(batch_sz), 순환 신경망의 결과 차원(enc_units), 사전 크기(vocab_size), 임베딩 차원(embedding_dim)이다. 함수로는 `tf.keras.layers.Embedding`과 `tf.keras.layers.GRU`가 있다. `tf.keras.layers.Embedding` 함수는 사전에 포함된 각 단어를 `self.embedding_dim` 차원의 임베딩 벡터로 만든다. `tf.keras.layers.GRU` 함수는 `GRU` 신경망을 만드는 부분이다. 인자로 전달되는 `self.enc_units`는 `GRU`의 결과 차원의 크기라고 이야기 했다. `return_sequences`는 각 시퀀스마다 출력을 반환할지 여부를 결정하는 값이며, 해당 모델에서는 각각의 시퀀스마다 출력을 반환한다. `return_state`는 마지막 상태 값의 반환 여부이며, 해당 모델은 상태값을 반환한다. 마지막 `recurrent_initializer`에는 초기값을 무엇으로 할 것인지 선언할 수 있으며, `glorot_uniform`은 `Glorot` 초기화 `Xavier` 초기화라고 불리는 초기화 방법으로, 이전 노드와 다음 노드의 개수에 의존하는 방법이다. `Uniform` 분포를 따르는 방법과 `Normal` 분포를 따르는 두 가지 방법이 사용되는데, 여기서는 `Glorot Uniform` 방법을 이용한 초기화 방법을 선택했다.
+- `call` 함수는 입력값 `x`와 은닉 상태 `hidden`을 받는다. `__init__` 함수에서 만들어 놓은 `embedding` 함수를 통해 `x` 값을 임베딩 벡터로 만든다. 그리고 `gru` 함수에 임베딩 벡터와 순환 신경망의 초기화 상태로 인자로 받은 은닉 상태를 전달하고, 결과값으로 시퀀스의 출력값과 마지막 상태값을 리턴한다. `tf.keras.layers`의 함수들은 고수준 API라서 이처럼 사용하기가 간편하다. 
+- 마지막으로 `initialize_hidden_state` 함수는 배치 크기를 받아 순환 신경망에 초기에 사용될 크기의 은닉 상태를 만드는 역할을 한다. 
+- 시퀀스 투 시퀀스 모델링에서 설명한 인코더 디코더 구조는 시퀀스 투 시퀀스의 문제점을 보완하기 위해 나온 개념이며, 기존의 시퀀스 투 시퀀스는 문장이 길어질수록 더 많은 정보를 고정된 길이에 담아야 하므로 정보의 손실이 있다는 점이 큰 문제로 지적됐다. 추가로 순환 신경망 특유의 문제인 장기 의존성 문제가 발생할 수 있는 부분 또한 문제점으로 지적됐다. 이러한 기존의 문제를 어텐션 방법을 통해 보완했다. 
