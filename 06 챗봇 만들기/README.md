@@ -1183,6 +1183,7 @@ index_targets = dec_target_processing(outputs, char2idx, tokenize_as_morph=True)
 - 여기까지는 앞서 알아본 셀프 어텐션의 구조와 동일하다. 하지만 어텐션의 이름이 내적 어텐션(dot product attention)이 아니라 스케일 내적 어텐션(scaled dot product attention)이다. 이는 중간에 크기를 조정하는 과정(scaling)이 추가된 것이다. 해당 모델을 제시한 논문에서 부가적으로 추가한 기법으로 `query`와 `value`를 이용해 내적한 값이 벡터의 차원이 커지면 학습이 잘 안 될 수 있기 떄문에 벡터 크기에 반비례하도록 크기를 조정하는 것이다. 즉, 다음 수식과 같이 어텐션을 적용하게 된다.
 
 
+![스크린샷 2025-03-30 오후 8 14 31](https://github.com/user-attachments/assets/482ff98e-bc07-4b1b-875f-eca896e30d7c)
 
 
 
