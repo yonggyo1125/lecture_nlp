@@ -1411,3 +1411,4 @@ def point_wise_feed_forward_network(**kargs):
 
 - 리지듀얼 커넥션(Residual Connection)은 간단하게 다음 그림에 나오는 방법으로 연산을 수행한다. 
 
+![스크린샷 2025-03-30 오후 9 37 14](https://github.com/user-attachments/assets/ad9b0ab7-2ee4-444d-ab4d-f614cd407216)
