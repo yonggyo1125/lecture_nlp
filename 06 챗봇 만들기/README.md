@@ -1470,4 +1470,6 @@ def positional_encoding(position, d_model):
 
 #### 인코더
 - 인코더는 앞서 순환신경망 기반 시퀀스 투 시퀀스와 같이 모델의 입력값에 대한 정보를 추출하는 모듈이다.
+  
+![스크린샷 2025-03-30 오후 10 01 40](https://github.com/user-attachments/assets/5ef99f6b-bff1-48bd-8221-4795367e0ef9)
 
