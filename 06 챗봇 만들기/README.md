@@ -1186,8 +1186,50 @@ index_targets = dec_target_processing(outputs, char2idx, tokenize_as_morph=True)
 
 - 위 수식처럼 `query`와 `key`를 내적한 값에 `key` 벡터의 차원 수를 제곱근한 값으로 나눈 후 소프트맥스 함수를 적용한다. 여기서 d<sub>k</sub>는 key 벡터의 차원 수를 의미한다. 전체적인 스케일 내적 어텐션을 그림으로 확인해 보자.
 
-
 ![스크린샷 2025-03-30 오후 8 17 22](https://github.com/user-attachments/assets/39480ea0-e069-491c-bcab-6af2504bbc22)
+
+- 그림을 보면 먼저 `query` 벡터와 `key` 벡터에 대해 어텐션 스코어 맵을 만들고 크기를 조정한다. 그리고 선택적으로 마스크(`mask`)를 적용한다(이는 바로 다음에 나오는 함수에서 설명하겠다). 그리고 이 값에 소프트맥스 함수를 적용한 후 마지막으로 value에 대한 가중합을 적용한다. 
+- 그림을 보면 `query`, `value`의 내적 부분과 마지막 `value`와의 가중합 부분이 `MatMul`이라는 행렬곱으로 나와 있는데, 이 부분은 코드를 먼저 본 후 어떤 내용인지 알아보자.
+
+```python
+def scaled_dot_product_attention(q, k, v, mask):
+    """Calculate the attention weights.
+    q, k, v must have matching leading dimensions.
+    k, v must have matching penultimate dimension, i.e.: seq_len_k = seq_len_v.
+    The mask has different shapes depending on its type(padding or look ahead) 
+    but it must be broadcastable for addition.
+
+    Args:
+    q: query shape == (..., seq_len_q, depth)
+    k: key shape == (..., seq_len_k, depth)
+    v: value shape == (..., seq_len_v, depth_v)
+    mask: Float tensor with shape broadcastable 
+          to (..., seq_len_q, seq_len_k). Defaults to None.
+
+    Returns:
+    output, attention_weights
+    """
+
+    matmul_qk = tf.matmul(q, k, transpose_b=True)  # (..., seq_len_q, seq_len_k)
+
+    # scale matmul_qk
+    dk = tf.cast(tf.shape(k)[-1], tf.float32)
+    scaled_attention_logits = matmul_qk / tf.math.sqrt(dk)
+
+    # add the mask to the scaled tensor.
+    if mask is not None:
+        scaled_attention_logits += (mask * -1e9)  
+
+    # softmax is normalized on the last axis (seq_len_k) so that the scores
+    # add up to 1.
+    attention_weights = tf.nn.softmax(scaled_attention_logits, axis=-1)  # (..., seq_len_q, seq_len_k)
+
+    output = tf.matmul(attention_weights, v)  # (..., seq_len_q, depth_v)
+
+    return output, attention_weights
+```
+
+- 먼저 `k(key)`, `q(query)`, `v(value)`에 대한 입력값을 모두 함수의 인자를 통해 받는다. 각 인자값은 모두 문장인데, 각 단어가 벡터로 돼 있고, 이것들이 모여서 행렬로 돼 있는 구조다. 개념적인 어텐션과 실제로 구현된 어텐션의 경우 각 단어의 벡터끼리 연산을 해서 계산하는 구조였다. 하지만 실제 코드와 위의 그림의 경우 행렬로 연산이 이뤄지고 있어서 혼동될 수 있지만 자세히 알아보면 결국 둘 다 똑같은 내용임을 알 수 있다. `query`, `key`, `value` 값이 행렬로 들어오면 어떻게 계산되는지 알아보자.
 
 
 
