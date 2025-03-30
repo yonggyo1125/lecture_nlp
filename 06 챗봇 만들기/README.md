@@ -1436,4 +1436,38 @@ out2 = self.layernorm2(out1 + ffn_output)  # (batch_size, input_seq_len, d_model
 
 ![스크린샷 2025-03-30 오후 9 49 29](https://github.com/user-attachments/assets/7d3c3f62-3843-4222-b0e6-7d3cb581af88)
 
+- 포지션 인코딩에 대한 수식은 크게 2개로 나뉜다. 첫 번째 수식은 피처 차원에서 인덱스가 짝수인 경우에 대해 사인 함수값을 할당하는 것이고, 두 번째 수식은 인덱스가 홀수인 경우에 대해 코사인 함수값을 할당하는 것이다. 사인 함수와 코사인 함수 안에 있는 식은 각 시퀀스 위치에 따라 피처 차원 인덱스에 각자 위치 정보를 달리 주고자 하는 의도를 가지고 있다. 포지션 인코딩을 코드로 구현하면 다음과 같다. 
+
+```python
+def get_angles(pos, i, d_model):
+    angle_rates = 1 / np.power(10000, (2 * i//2) / np.float32(d_model))
+    return pos * angle_rates
+```
+
+- 포지션 임베딩을 만들 행렬을 구성하기 위해 `get_angles` 함수를 선언한다. 이 함수는 앞에서 본 수식 중 `pos/100002i/dim` 값을 만드는 함수다. 각 입력 파라미터는 pos, i, d_model로 돼 있다. pos에는 포지션에 대한 인덱스 위치 리스트를 입력하고 i에는 차원에 대한 리스트를 입력한다. 이렇게 하면 각 순서에 따른 각도값을 얻을 수 있다. 이제 `get_angles`를 가지고 포지션 임베딩을 만들어본다. 
+
+```python
+def positional_encoding(position, d_model):
+    angle_rads = get_angles(np.arange(position)[:, np.newaxis],
+                          np.arange(d_model)[np.newaxis, :],
+                          d_model)
+
+    # apply sin to even indices in the array; 2i
+    angle_rads[:, 0::2] = np.sin(angle_rads[:, 0::2])
+
+    # apply cos to odd indices in the array; 2i+1
+    angle_rads[:, 1::2] = np.cos(angle_rads[:, 1::2])
+
+    pos_encoding = angle_rads[np.newaxis, ...]
+
+    return tf.cast(pos_encoding, dtype=tf.float32)
+```
+
+- `get_angles` 함수의 결괏값을 출력하면 포지션과 차원별로 각기 다른 값이 순차적으로 할당돼 있을 것이다. 이제 이 값들을 짝수 차원에는 사인 함수를, 홀수 차원에서는 코사인 함수를 적용해 보자. 짝수 차원과 홀수 차원에 적용하려면 배열의 인덱스에 \[0::2\], \[1::2\]와 같은 방식으로 입력하면 된다. 이렇게 하면 \[0::2\]는 0에서부터 2씩 증가하는 인덱스의 배열 값만 출력되고 \[1::2\]는 1에서부터 2씩 증가하는 인덱스의 배열 값만 출력된다. 이렇게 사인, 코사인 함수를 적용한 값은 배열 `angle_rads`에 할당된다. 마지막으로 나중에 인코더 디코더 레이어에서 바로 활용할 수 있도록 배치 차원을 만들기 위해 다음과 같이 한다. 
+- `np.newaxis`는 새로운 차원을 만드는 역할을 한다. 이렇게 `newaxis`를 인덱스 칸에 추가하면 새로운 차원을 만들게 된다. 새로운 차원을 만들면 만들어진 포지션 임베딩 행렬의 차원은 \[배치 차원 X 시퀀스 차원 X 피처 차원\]으로 구성된다.
+- 이렇게 구성을 마친 배열은 `tf.cast`를 통해 상수가 되어 모델 그래프에 활용할 수 있게 된다. 이렇게 만들어진 포지션 임베딩은 워드 임베딩과 더해져 각 워드 정보에 순서가 들어갈 수 있도록 활용된다. 
+- 이제 포지션 인코딩 기법까지 모든 모듈에 대한 정의가 끝났다. 이렇게 정의한 모듕을 이용해 인코더, 디코더 모듈을 정의해보자.
+
+#### 인코더
+- 인코더는 앞서 순환신경망 기반 시퀀스 투 시퀀스와 같이 모델의 입력값에 대한 정보를 추출하는 모듈이다.
 
