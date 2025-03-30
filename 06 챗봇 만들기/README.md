@@ -859,4 +859,186 @@ class Encoder(tf.keras.layers.Layer):
 
 ![스크린샷 2025-03-30 오후 12 01 49](https://github.com/user-attachments/assets/c7bcb705-bdcb-4150-abcd-76b849cb5707)
 
+- 기존의 시퀀스 투 시퀀스는 인코더의 고정된 문맥 벡터가 디코더로 전달된다면 어텐션이 추가된 방법은 은닉 상태의 값을 통해 어텐션을 계산하고 디코더의 각 시퀀스 스텝마다 계산된 어텐션을 입력으로 넣는다. 즉, 어텐션도 함께 학습을 진행하게 되며 학습을 통해 디코더의 각 시퀀스 스텝마다 어텐션의 가중치는 다르게 적용된다. 
+- 그럼 어텐션 소스코드를 살펴보자. 
 
+```python
+ class BahdanauAttention(tf.keras.layers.Layer):
+    def __init__(self, units):
+        super(BahdanauAttention, self).__init__()
+        self.W1 = tf.keras.layers.Dense(units)
+        self.W2 = tf.keras.layers.Dense(units)
+        self.V = tf.keras.layers.Dense(1)
+
+    def call(self, query, values):
+        hidden_with_time_axis = tf.expand_dims(query, 1)
+
+        score = self.V(tf.nn.tanh(
+            self.W1(values) + self.W2(hidden_with_time_axis)))
+
+        attention_weights = tf.nn.softmax(score, axis=1)
+
+        context_vector = attention_weights * values
+        context_vector = tf.reduce_sum(context_vector, axis=1)
+
+        return context_vector, attention_weights
+```
+
+- `BahdanauAttention` 클래스의 `__init__` 함수는 출력 벡터의 크기를 인자로 받는다. `tf.keras.layers.Dense` 함수를 통해 출력 크기가 `units` 크기인 `W1`과 `W2`, 출력 크기가 1인 v의 완전 연결 계층을 만든다. 
+- `call` 함수의 인자인 `query`는 인코더 순환 신경망의 은닉층의 상태 값이고, `values`는 인코더 재귀 순환망의 결괏값이다. 첫 번째 줄에서 `query`를 `W2`에 행렬곱을 할 수 있는 형태(shape)를 만든다. 두 번째 줄에서 `W1`과 `W2`의 결괏값의 요소를 각각 더하고 하이퍼볼릭 탄젠트 활성함수를 통과한 값을 v에 행렬곱하면 1차원 벡터값이 나온다. 모델 훈련 중 `W1`, `W2`, `V` 가중치들은 학습된다. 소프트맥스 함수를 통과시켜 어텐션 가중치를 얻는데, `attention_weights` 값은 모델이 중요하다고 판단하는 값은 1에 가까워지고, 영향도가 떨어질수록 0에 가까운 값이 된다. `attention_weights` 값을 `value`, 즉 순환신경망 결괏값에 행렬 곲을 하게 되면 1에 가까운 값에 위치한 `value` 값은 커지고 0에 가까운 값에 위치한 `value` 값은 작아진다. 
+- 결과적으로 인코더 순환 신경망의 결괏값을 어텐션 방법을 적용해 가중치를 계산해서 가중치가 적용된 새로운 인코더 순환 신경망의 결과값을 만들어내서 디코더에 전달하게 되며, 이때 만들어진 `Attention` 클래스에 포함된 `W1`, `W2`, `V`는 학습을 통해 값들이 최적화되며 기존 시퀀스 투 시퀀스의 문제를 해결하는 방법론이 적용된다.
+- 디코더의 소스코드를 살펴보자.
+
+```python
+class Decoder(tf.keras.layers.Layer):
+    def __init__(self, vocab_size, embedding_dim, dec_units, batch_sz):
+        super(Decoder, self).__init__()
+        
+        self.batch_sz = batch_sz
+        self.dec_units = dec_units
+        self.vocab_size = vocab_size 
+        self.embedding_dim = embedding_dim  
+        
+        self.embedding = tf.keras.layers.Embedding(self.vocab_size, self.embedding_dim)
+        self.gru = tf.keras.layers.GRU(self.dec_units,
+                                       return_sequences=True,
+                                       return_state=True,
+                                       recurrent_initializer='glorot_uniform')
+        self.fc = tf.keras.layers.Dense(self.vocab_size)
+
+        self.attention = BahdanauAttention(self.dec_units)
+        
+    def call(self, x, hidden, enc_output):
+        context_vector, attention_weights = self.attention(hidden, enc_output)
+
+        x = self.embedding(x)
+
+        x = tf.concat([tf.expand_dims(context_vector, 1), x], axis=-1)
+
+        output, state = self.gru(x)
+        output = tf.reshape(output, (-1, output.shape[2]))
+            
+        x = self.fc(output)
+        
+        return x, state, attention_weights
+```
+
+- Decoder 클래스의 `__init__` 함수는 Encoder 클래스의 `__init__` 함수와 유사하며, 다른 부분만 설명하겠다. 출력 값이 사전 크기인 완전 연결 계층 `fc`를 만들고 `BahdanauAttention` 클래스를 생성한다.
+- `call` 함수는 디코더의 입력값 `x`와 인코더의 은닉 상태 값 `hidden`, 인코더의 결과값을 인자로 받는다. 
+- `self.attention` 함수를 호출하면 `BahdanauAttention` 클래스의 `call` 함수가 호출되고 앞에서 설명한 값에 따라 어텐션이 계산된 문맥 벡터(context_vector)를 돌려받는다. 디코더의 입력값을 `self.embedding` 함수를 통해 임베딩 벡터를 받고 문맥 벡터와 임베딩 벡터를 결합해 x를 구성하고 디코더 순환 신경망을 통과해 순환 신경망의 결과값(output)을 얻게 되고 이 값을 완전 연결 계층(fully-connected layer)을 통과해서 사전 크기의 벡터 x를 만든다. 각각의 독립적인 클래스 인코더, 디코더, 어텐션을 살펴봤다.
+- 이어서 손실 함수와 정확도 측정 함수를 살펴보자.
+
+```python
+optimizer = tf.keras.optimizers.Adam()
+
+loss_object = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, reduction='none')
+
+train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='accuracy')
+
+def loss(real, pred):
+    mask = tf.math.logical_not(tf.math.equal(real, 0))
+    loss_ = loss_object(real, pred)
+    mask = tf.cast(mask, dtype=loss_.dtype)
+    loss_ *= mask
+    return tf.reduce_mean(loss_)
+
+def accuracy(real, pred):
+    mask = tf.math.logical_not(tf.math.equal(real, 0))
+    mask = tf.expand_dims(tf.cast(mask, dtype=pred.dtype), axis=-1)
+    pred *= mask    
+    acc = train_accuracy(real, pred)
+
+    return tf.reduce_mean(acc)
+```
+
+- 여기서는 세 가지를 미리 생성하는데, 최적화로 아담을 사용하기 위한 객체(optimizer), 크로스 엔트로피로 손실 값을 측정하기 위한 객체(loss_object), 정확도 측정을 위한 객체(train_accuracy)를 생성한다. 
+- `loss` 함수는 인자로 정답과 예측한 값을 받아서 두 개의 값을 비교해서 손실을 계산하며, real 값 중 0인 값 \<PAD\>는 손실 계산에서 빼기 위한 함수다.
+- `accuracy` 함수는 `loss` 함수와 비슷하며, 다른 점은 `train_accuracy` 함수를 통해 정확도를 체크한다는 것이다. 
+- `loss` 함수와 `accuracy` 함수에 동일하게 등장하는 `mask`를 한번 보자.
+- 첫 번째 줄에 등장하는 `tf.mat.logical_not(tf.math.equal(real, 0)`은 정답 real에 포함되는 값 중 0인 것은 \<PAD\>를 의미하는 값이며, 해당 값들은 True(1)가 되고 \<PAD\>를 제외한 나머지 값들은 False(0)가 된다. 치환된 요소들의 값에 `logical_not` 함수를 적용하면 각 요소들의 값은 0에서 1로, 1에서 0으로 변경된다. 이렇게 변경된 값은 `loss_ *= mask`에 요소 간에 곱을 해주면 \<PAD\> 부분들은 loss_ 계산에서 빠진다. 또한 `pred *= mask`를 수행하면 정확도 측정에서 빠진다. 
+- 이제 살펴볼 `seq2seq`클래스는 각각 분리돼 있는 각 클래스를 이어주는 메인 클래스로 볼 수 있다.
+
+```python
+class seq2seq(tf.keras.Model):
+    def __init__(self, vocab_size, embedding_dim, enc_units, dec_units, batch_sz, end_token_idx=2):    
+        super(seq2seq, self).__init__()
+        self.end_token_idx = end_token_idx
+        self.encoder = Encoder(vocab_size, embedding_dim, enc_units, batch_sz) 
+        self.decoder = Decoder(vocab_size, embedding_dim, dec_units, batch_sz) 
+
+    def call(self, x):
+        inp, tar = x
+        
+        enc_hidden = self.encoder.initialize_hidden_state(inp)
+        enc_output, enc_hidden = self.encoder(inp, enc_hidden)
+
+        dec_hidden = enc_hidden
+
+        predict_tokens = list()
+        for t in range(0, tar.shape[1]):
+            dec_input = tf.dtypes.cast(tf.expand_dims(tar[:, t], 1), tf.float32) 
+            predictions, dec_hidden, _ = self.decoder(dec_input, dec_hidden, enc_output)
+            predict_tokens.append(tf.dtypes.cast(predictions, tf.float32))   
+        return tf.stack(predict_tokens, axis=1)
+    
+    def inference(self, x):
+        inp  = x
+
+        enc_hidden = self.encoder.initialize_hidden_state(inp)
+        enc_output, enc_hidden = self.encoder(inp, enc_hidden)
+
+        dec_hidden = enc_hidden
+        
+        dec_input = tf.expand_dims([char2idx[std_index]], 1)
+        
+        predict_tokens = list()
+        for t in range(0, MAX_SEQUENCE):
+            predictions, dec_hidden, _ = self.decoder(dec_input, dec_hidden, enc_output)
+            predict_token = tf.argmax(predictions[0])
+            
+            if predict_token == self.end_token_idx:
+                break
+            
+            predict_tokens.append(predict_token)
+            dec_input = tf.dtypes.cast(tf.expand_dims([predict_token], 0), tf.float32)   
+            
+        return tf.stack(predict_tokens, axis=0).numpy()
+```
+
+- `seq2seq` 클래스의 `__init__` 함수는 `Encoder` 클래스를 생성할 떄 필요한 값과 `Decoder` 클래스를 생성할 떄 필요한 인자값을 받는다. 
+- `call` 함수는 인코더의 입력값과 디코더의 입력값을 `x`를 통해 받는다. `self.encoder`를 통해 인코더 결괏값과 인코더 은닉 상태값을 만든다. 디코더는 시퀀스 최대 길이만큼 반복하면서 디코더의 출력값을 만들어낸다.
+- 시퀀스마다 나온 결과값을 리스트(`predict_tokens`)에 넣어 손실 계산 또는 정확도를 계산하는 용도로 사용된다.
+- `inference` 함수는 사용자의 입력에 대한 모델의 결괏값을 확인하기 위해 테스트 목적으로 만들어진 함수이며, 하나의 배치만 동작하도록 돼 있으며, \<END\> 토큰을 만나면 반복문을 멈춘다. 전체적인 함수 구조는 `call` 함수와 유사하다.
+- `seq2seq`를 만들어 보자.
+
+```python
+model = seq2seq(vocab_size, EMBEDDING_DIM, UNITS, UNITS, BATCH_SIZE, char2idx[end_index])
+model.compile(loss=loss, optimizer=tf.keras.optimizers.Adam(1e-3), metrics=[accuracy])
+```
+
+- `seq2seq` 객체를 생성한다. 그리고 `compile` 함수를 통해 학습 방식 설정을 한다. 설정은 손실 함수, 최적화 함수, 성능 측정 함수를 설정한다.
+- 학습을 진행해 보자.
+
+```python
+PATH = DATA_OUT_PATH + MODEL_NAME
+if not(os.path.isdir(PATH)):
+        os.makedirs(os.path.join(PATH))
+        
+checkpoint_path = DATA_OUT_PATH + MODEL_NAME + '/weights.h5'
+    
+cp_callback = ModelCheckpoint(
+    checkpoint_path, monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True)
+
+earlystop_callback = EarlyStopping(monitor='val_accuracy', min_delta=0.0001, patience=10)
+
+history = model.fit([index_inputs, index_outputs], index_targets,
+                    batch_size=BATCH_SIZE, epochs=EPOCH,
+                    validation_split=VALIDATION_SPLIT, callbacks=[earlystop_callback, cp_callback])
+```
+
+- 체크포인트가 저장될 폴더를 만든다. 그리고 두 개의 함수를 정의한다. 첫째, 모델 체크포인트를 어떻게 저장할지에 대한 정책을 정의한 `ModelCheckpoint` 함수와 학습을 조기 종료할 정책을 정의한 `EarlyStopping`을 선언한다. 그리고 `model.fit`을 통해 학습을 진행한다. `fit` 함수의 첫 번째 배열에 들어가는 것은 인코더의 입력과 디코더의 입력이며, 두 번째 인자인 `index_targets`는 정답이다. 여기에 정의된 두 함수인 `ModelCheckpoint`와 `EarlyStopping`을 `callbacks` 인자에 넣으면 정책에 따라 자동으로 구동된다. 
+- 학습과 평가 정확도를 시각화한 그래프를 확인하자.
+
+```python
+plot_graphs(history, 'accuracy')
+```
