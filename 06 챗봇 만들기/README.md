@@ -1299,6 +1299,98 @@ def scaled_dot_product_attention(q, k, v, mask):
 
 ![스크린샷 2025-03-30 오후 9 06 22](https://github.com/user-attachments/assets/fd976be3-5a6c-441b-99f0-ba6c78092868)
 
+- 앞서 내적 셀프 어텐션에서 본 `query`, `key`, `value`에 대한 특징값을 헤드 수만큼 나눠서 리니어(Linear) 레이러를 거쳐 내적 어텐션(Scaled Dot-Product)을 구해서 다시 합치는 과정을 거친다. 이 과정을 거치고 최종적으로 리니어 레이어를 거쳐 나오면 멀티 헤드 어텐션에 대한 과정을 마치게 된다.
+- 멀티 헤드 어텐션의 구현은 다음과 같다.
 
+```python
+class MultiHeadAttention(tf.keras.layers.Layer):
+    def __init__(self, **kargs):
+        super(MultiHeadAttention, self).__init__()
+        self.num_heads = kargs['num_heads']
+        self.d_model = kargs['d_model']
+
+        assert self.d_model % self.num_heads == 0
+
+        self.depth = self.d_model // self.num_heads
+
+        self.wq = tf.keras.layers.Dense(kargs['d_model'])
+        self.wk = tf.keras.layers.Dense(kargs['d_model'])
+        self.wv = tf.keras.layers.Dense(kargs['d_model'])
+
+        self.dense = tf.keras.layers.Dense(kargs['d_model'])
+
+    def split_heads(self, x, batch_size):
+        """Split the last dimension into (num_heads, depth).
+        Transpose the result such that the shape is (batch_size, num_heads, seq_len, depth)
+        """
+        x = tf.reshape(x, (batch_size, -1, self.num_heads, self.depth))
+        return tf.transpose(x, perm=[0, 2, 1, 3])
+
+    def call(self, v, k, q, mask):
+        batch_size = tf.shape(q)[0]
+
+        q = self.wq(q)  # (batch_size, seq_len, d_model)
+        k = self.wk(k)  # (batch_size, seq_len, d_model)
+        v = self.wv(v)  # (batch_size, seq_len, d_model)
+
+        q = self.split_heads(q, batch_size)  # (batch_size, num_heads, seq_len_q, depth)
+        k = self.split_heads(k, batch_size)  # (batch_size, num_heads, seq_len_k, depth)
+        v = self.split_heads(v, batch_size)  # (batch_size, num_heads, seq_len_v, depth)
+
+        # scaled_attention.shape == (batch_size, num_heads, seq_len_q, depth)
+        # attention_weights.shape == (batch_size, num_heads, seq_len_q, seq_len_k)
+        scaled_attention, attention_weights = scaled_dot_product_attention(
+            q, k, v, mask)
+
+        scaled_attention = tf.transpose(scaled_attention, perm=[0, 2, 1, 3])  # (batch_size, seq_len_q, num_heads, depth)
+
+        concat_attention = tf.reshape(scaled_attention, 
+                                      (batch_size, -1, self.d_model))  # (batch_size, seq_len_q, d_model)
+
+        output = self.dense(concat_attention)  # (batch_size, seq_len_q, d_model)
+
+        return output, attention_weights
+```
+
+- 멀티 헤드 어텐션은 기본적으로 앞에서 구현한 내적 어텐션을 기반으로 구현돼 있다. 클래스 구현을 세부적으로 알아보자. 먼저 `__init__` 함수부터 살펴보자.
+- `__init__` 함수에서는 입력 파라미터로 `**kargs`를 받으며, 이 안에 `d_model`과 `num_heads`가 있다. 여기서 `d_model`은 어텐션을 연산할 때 `key`, `query`, `value`에 대한 차원을 정의하기 위한 파라미터고 `num_heads`는 어텐션 헤드 수를 정의하기 위한 파라미터다. 각 파라미터는 `self.d_model`, `self.num_heads`에 각각 할당 된다. 
+- 항상 `d_model`의 차원 수는 헤드 갯수만큼 나눠져야 하기 때문에 `d_model` 값과 `num_heads`를 나눴을 때 나머지가 발생하면 안 된다. 이러한 문제를 방지하기 위해 `assert` 구문을 활용해 두 변수를 대상으로 나눗셈했을 때 나머지가 발생하면 에러가 발생하도록 구현했다. `d_model`을 `num_heads`로 나눴을 때 나머지가 0이라면 `d_model`의 차원 값을 어텐션 헤드 수만큼 나눈 값을 `self.depth`에 할당해 각 헤드에 입력될 벡터의 차원 수를 정하게 한다. `self.depth`는 뒤에 나올 `split_heads` 함수에서 다룰 예정이다. 
+- `self.wq`, `self.wk`, `self.wv`는 앞에서 언급한 스케일 내적 연산 이전에 입력한 `key`, `query`, `value`에 대한 차원 수를 맞추기 위한 레이어다. 이를 위해 `tf.keras.layers.Dense`를 생성해 각 변수에 할당한다. 마지막으로 `self.dense`는 셀프 어텐션 레이어를 출력하기 위한 레이어다. 앞의 레이어와 마찬가지로 `Dense`를 생성하고 할당하게 한다. 멀티헤드 어텐션에 대한 설정을 `__init__` 함수에서 정의했다면 입력한 이번에는 각 벡터를 헤드 수만큼 나눌 수 있게 하는 `split_heads` 함수를 먼저 살펴보자.
+- `split_heads`는 `key`, `query`, `value` 에 대한 벡터를 헤드 수만큼 분리할 수 있게 하는 함수다. 이 함수는 \[배치 차원 X 시퀀스 차원 X 피처 차원\]으로 구성된 벡터를 \[배치 차원 X 헤드 차원 X 시퀀스 차원 X 피처 차원\]으로 변환하는 역할을 한다.
+- 먼저 각 피처 차원을 헤드 수만큼 분리해야 한다. `tf.reshape`를 활용하면 피처 차원을 헤드 수만큼 분리할 수 있다. `reshape`에 벡터 `x`를 입력하고 변경할 핼렬의 차원값을 (batch_size, -1, self.num_heads, self.depth)로 입력한다. 여기서 배치 크기를 나타내는 batch_size를 왜 함수의 입력 파라미터로 전달하는지 궁금해할 수 있다. `reshape`할 때는 한 개의 차원에 대해서만 값을 알지 않아도 재구성이 가능하다. `num_heads`와 `depth`의 경우는 이미 하이퍼파라미터에 의해 정해져 있지만 배치 크기나 시퀀스 크기에 대해서는 그렇지 못하다. 모델을 학습하는 도중 입력 배치 데이터의 시퀀스 길이가 매번 바뀌는 경우가 있을 수 있기 때문이다. 따라서 정해진 시퀀스가 매번 바뀔 수 있기 때문에 `batch_size` 값을 정의하게 한 것이다. 
+- `tf.reshape`만 하게 되면 \[배치 차원 X 시퀀스 차원 X 헤드 차원 X 피처 차원\]으로 구성된다. 원하는 출력 차원으로 바뀌기 위해 `tf.transpose` 연산을 통해 시퀀스, 헤드 차원만 바꿀 수 있게 한다. 
+
+```python
+   def call(self, v, k, q, mask):
+        batch_size = tf.shape(q)[0]
+
+        q = self.wq(q)  # (batch_size, seq_len, d_model)
+        k = self.wk(k)  # (batch_size, seq_len, d_model)
+        v = self.wv(v)  # (batch_size, seq_len, d_model)
+
+        q = self.split_heads(q, batch_size)  # (batch_size, num_heads, seq_len_q, depth)
+        k = self.split_heads(k, batch_size)  # (batch_size, num_heads, seq_len_k, depth)
+        v = self.split_heads(v, batch_size)  # (batch_size, num_heads, seq_len_v, depth)
+
+        # scaled_attention.shape == (batch_size, num_heads, seq_len_q, depth)
+        # attention_weights.shape == (batch_size, num_heads, seq_len_q, seq_len_k)
+        scaled_attention, attention_weights = scaled_dot_product_attention(
+            q, k, v, mask)
+
+        scaled_attention = tf.transpose(scaled_attention, perm=[0, 2, 1, 3])  # (batch_size, seq_len_q, num_heads, depth)
+
+        concat_attention = tf.reshape(scaled_attention, 
+                                      (batch_size, -1, self.d_model))  # (batch_size, seq_len_q, d_model)
+
+        output = self.dense(concat_attention)  # (batch_size, seq_len_q, d_model)
+
+        return output, attention_weights
+```
+
+- 이제 본격적으로 멀티헤드 어텐션이 동작하는 `call` 함수를 구현하자. 앞에서 만든 스케일 내적 어텐션 연산과 `__init__`, `split_heads` 함수를 활용해 어텐션 레이어 연산을 구성한다. 입력 파라미터는 입력 벡터 `key`, `query`, `value`, 순방향 마스크를 입력할 `mask`다. 먼저 입력한 key, query, value 값을 self.wq, self.wk, self.wv 레이어를 통해 내적 연산할 준비를 한다. 그리고 self.split_heads 함수로 헤드 수에 맞게 피처를 분리하고 `scaled_dot_product_attention`으로 내적 어텐션을 수행한다. 이렇게 하면 여러 개의 헤드 피처에 대해 어텐션이 적용된 벡터를 얻을 수 있다. 어텐션이 적용된 벡터는 `scaled_attention`을 통해 얻을 수 있다. 그 밖에 `attention_weight`는 시퀀스의 요소별로 서로 어텐션이 얼마나 적용돼 있는지 볼 수 있다. 출력된 `scaled_attention`은 다시 \[배치 차원, 시퀀스 차원, 피처 차원\]으로 맞춰 출력해야 하기 때문에 `tf.transpose`와 `tf.reshape`을 다시 활용한다. 여기서 두 함수를 구현하는 방식은 앞서 `split_heads`에서 구현한 내용을 반대로 만든다고 생각하면 쉬울 것이다. 그리고 마지막으로 `self.dense`를 통해 출력할 멀티 헤드 어텐션 벡터를 구성한다. 
+
+#### 포지션-와이즈 피드 포워드 네트워크
+
+- 트랜스포머 네트워크에서는 셀프 어텐션 레이어를 거친 다음 피드 포워드 네트워크를 거치게 돼 있다. 이 네트워크는 한 문장에 있는 단어 토큰 벡터 각각에 대해 연산하는 네트워크로서 논문에서는 포지션-와이즈 피드 포워드 네트워크(Position-wise Feedforward Network)라 표현한다. 
 
 
