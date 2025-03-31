@@ -1563,4 +1563,47 @@ class Encoder(tf.keras.layers.Layer):
 
 ![스크린샷 2025-03-31 오후 9 28 32](https://github.com/user-attachments/assets/1c701e38-d5ae-4bc9-b80e-6e168210c60b)
 
+- 보다시피 디코더 부분 역시 전체적인 구조는 인코더와 거의 비슷하게 구성돼 있다. 다른 점은 인코더의 경우 하나의 블록이 2개의 레이어로 구성돼 있는데 디코더의 경우 총 3개의 레이어로 구성돼 있다는 점이다. 즉, 두 개의 어텐션과 하나의 피드 포워드 레이어로 구성돼 있다. 먼저 각 어텐션의 역할을 간략하게 설명하면 첫 번째 어텐션의 경우 그림을 보면 입력이 해당 블록이 아닌 외부에서 들어오는 것을 볼 수 있다. 이 값에는 인코더의 결과값이 들어오게 된다. 즉, 인코더와 디코더의 관계를 확인하는 어텐션 구조다. 
+- 그리고 추가로 첫 번째 셀프 어텐션의 경우 그림을 보면 마스크 어텐션이라고 돼 있는 것을 확인할 수 있다. 즉, 예측을 해야 하는 디코더에서는 특정 단어 이후의 단어를 참고하지 않도록 앞에서 말한 마스크 기법을 사용하는 것이다. 이렇게 두 개의 어텐션을 적용한 후 이후 마지막으로 인코더 부분과 동일하게 피드 포워드 레이어를 적용하면 하나의 디코더 블록이 완성된다. 위의 구조를 코드로 구현해 보자.
 
+```python
+class DecoderLayer(tf.keras.layers.Layer):
+    def __init__(self, **kargs):
+        super(DecoderLayer, self).__init__()
+
+        self.mha1 = MultiHeadAttention(**kargs)
+        self.mha2 = MultiHeadAttention(**kargs)
+
+        self.ffn = point_wise_feed_forward_network(**kargs)
+
+        self.layernorm1 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm2 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm3 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
+
+        self.dropout1 = tf.keras.layers.Dropout(kargs['rate'])
+        self.dropout2 = tf.keras.layers.Dropout(kargs['rate'])
+        self.dropout3 = tf.keras.layers.Dropout(kargs['rate'])
+    
+    
+    def call(self, x, enc_output, look_ahead_mask, padding_mask):
+        # enc_output.shape == (batch_size, input_seq_len, d_model)
+        attn1, attn_weights_block1 = self.mha1(x, x, x, look_ahead_mask)  # (batch_size, target_seq_len, d_model)
+        attn1 = self.dropout1(attn1)
+        out1 = self.layernorm1(attn1 + x)
+
+        attn2, attn_weights_block2 = self.mha2(
+            enc_output, enc_output, out1, padding_mask)  # (batch_size, target_seq_len, d_model)
+        attn2 = self.dropout2(attn2)
+        out2 = self.layernorm2(attn2 + out1)  # (batch_size, target_seq_len, d_model)
+
+        ffn_output = self.ffn(out2)  # (batch_size, target_seq_len, d_model)
+        ffn_output = self.dropout3(ffn_output)
+        out3 = self.layernorm3(ffn_output + out2)  # (batch_size, target_seq_len, d_model)
+
+        return out3, attn_weights_block1, attn_weights_block2
+```
+
+- 앞서 구현한 인코더 레이어와 구조는 대략 비슷하다. 차이점은 디코더 셀프 어텐션 연산에 순방향 마스크가 입력값으로 추가됐고 어텐션 연산 시 인코더 정보 벡터가 입력으로 들어와 디코더의 정보 벡터와 어텐션 연산을 하는 부분이 추가됐다는 것이다.
+- `__init__` 함수의 구현부터 보면 앞에서 구현한 인코더 레이어와 같은 모듈을 생성한다. 여기서 `encoder` 정보와 어텐션 연산을 해야 하기 때문에 멀티 헤드 어텐션과 레이어 노멀라이제이션, 드롭아웃이 하나씩 더 추가됐다. 디코더의 `call` 함수는 `__init__` 함수와 같이 인코더 레이어와 비슷하게 구현한다. 다른 점은 인코더 정보 벡터가 추가로 입력되고, 순방향 어텐션 마스크가 입력으로 들어온다는 점이다. `call` 함수의 파라미터를 살펴보면 디코더 입력 벡터 `x`와 인코더 정보 벡터 `enc_output`, 순방향 어텐션 마스크인 `look_ahead_mask`, 패딩 마스크인 `padding_mask`가 있다. 
+- 첫 어텐션 연산은 디코더 벡터를 가지고 셀프 어텐션 연산을 하는 부분이다. 인코더 연산과 같이 멀티 헤드 어텐션을 거쳐 리지듀얼 커넥션을 하고 레이어 노멀라이즈를 하는 과정을 거친다. 
+- 다음 연산 과정은 인코더 정보와 디코더 정보를 가지고 어텐션을 적용하는 과정이다. 여기서는 셀프 어텐션이 아닌 인코더의 결괏값과의 관계를 확인하는 어텐션 구조다.
