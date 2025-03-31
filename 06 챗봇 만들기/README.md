@@ -1805,4 +1805,20 @@ plot_graphs(history, 'loss')
 
 ![스크린샷 2025-03-31 오후 10 19 37](https://github.com/user-attachments/assets/db7fd420-8a0b-4509-b03b-f00a31eb42a0)
 
+- 이전 모델 학습 성능 그래프와 비교하면 다른 점이 하나 있다. 검증 `accuracy`의 경우 계속해서 올라가는 수치를 보여 좋아 보이지만 검증 `loss`는 오히려 높아져서 오버피팅으로 보인다. 
+- 모델 학습이 끝났다면 이제 모델 추론을 해보자.
 
+```python
+text = "남자친구 승진 선물로 뭐가 좋을까?"
+test_index_inputs, _ = enc_processing([text], char2idx)
+outputs = model.inference(test_index_inputs)
+
+print(' '.join([idx2char[str(o)] for o in outputs]))
+```
+
+```
+평소에 필요했던 게 좋을 것 같아요
+```
+
+- 모델 추론 방법은 간단하다. 텍스트를 `enc_processing` 함수를 통해 인덱스로 변환하고 `model.inference`를 통해 생성된 토큰 인덱스를 받는다. 그리고 `idx2word`를 통해 인덱스를 텍스트 토큰으로 변환한다. 이렇게 하면 입력 문장을 통해 생성된 문장을 확인할 수 있을 것이다. 
+- 이렇게 해서 두 가지 타입의 `Seq2Seq` 모델들을 살펴봤다. 이 모델들은 단순히 한글 대화 데이터셋만 학습할 수 있는 모델은 아니다. 어떤 입력 텍스트를 넣었을 때 어떤 텍스트를 기대할 수 있는지 상상할 수 있는 데이터셋이 있다면 시도해보길 바란다.
