@@ -1561,3 +1561,6 @@ class Encoder(tf.keras.layers.Layer):
 
 - 디코더의 경우 인코더와는 조금 다르게 하나의 레이어가 더 추가된 형태다. 우선 인코더 부분과 어떻게 다른지 모델을 나타낸 그림을 통해 알아보자.
 
+![스크린샷 2025-03-31 오후 9 28 32](https://github.com/user-attachments/assets/1c701e38-d5ae-4bc9-b80e-6e168210c60b)
+
+
