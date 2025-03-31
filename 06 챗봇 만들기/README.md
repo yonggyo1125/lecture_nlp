@@ -1610,5 +1610,194 @@ class DecoderLayer(tf.keras.layers.Layer):
 
 ![스크린샷 2025-03-31 오후 9 41 23](https://github.com/user-attachments/assets/37399a77-67c3-45b4-aa87-ccfe688574b6)
 
+- 구체적으로 셀프 어텐션 연산과 다른 점을 확인해보면 함수의 `query`의 경우 디코더의 셀프 어텐션과 레이어의 결괏값이 들어가게 되는데 `key`와 `value`의 경우 인코더의 결괏값이 들어간다는 것이다. 이렇게 연산하게 되면 디코더 값에 대해 인코더의 결괏값과의 관계를 확인하는 것이다. 위 그림을 살펴보면 디코더에서 들어온 '딥러닝, '자연어', '처리'라는 `query` 정보와 인코더에서 들어온 '딥러닝, '자연어', '처리', '어때, '?'라는 `key` 정보가 있으면 이 둘 간의 어텐션 정보를 만든다. 그리고 이 정보를 인코더에서 들어온 정보를 `value`로 해서 가중합을 구하게 한다. 이렇게 하면 '자연어' 다음 단어를 예측할 때 활용할 수 있는 인코더 정보가 되는 것이다. 여기서는 순방향 어텐션을 하지 않기 때문에 패딩 마스크만 적용한다. 
+- 인코더 정보와 어텐션 연산을 거치게 되면 다시 리지듀얼 커넥션을 하고 인코더와 같은 방식의 피드 포워드 네트워크 연산을 거치게 된다. 
+- 이렇게 연산을 구현함으로써 디코더 레이어에 대해서도 구현을 마쳤다. 이제 디코더 모듈을 구현해 보자.
+
+```python
+class Decoder(tf.keras.layers.Layer):
+    def __init__(self, **kargs):
+        super(Decoder, self).__init__()
+
+        self.d_model = kargs['d_model']
+        self.num_layers = kargs['num_layers']
+
+        self.embedding = tf.keras.layers.Embedding(kargs['target_vocab_size'], self.d_model)
+        self.pos_encoding = positional_encoding(kargs['maximum_position_encoding'], self.d_model)
+
+        self.dec_layers = [DecoderLayer(**kargs) 
+                           for _ in range(self.num_layers)]
+        self.dropout = tf.keras.layers.Dropout(kargs['rate'])
+
+    def call(self, x, enc_output, look_ahead_mask, padding_mask):
+        seq_len = tf.shape(x)[1]
+        attention_weights = {}
+
+        x = self.embedding(x)  # (batch_size, target_seq_len, d_model)
+        x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
+        x += self.pos_encoding[:, :seq_len, :]
+
+        x = self.dropout(x)
+
+        for i in range(self.num_layers):
+            x, block1, block2 = self.dec_layers[i](x, enc_output, look_ahead_mask, padding_mask)
+
+            attention_weights['decoder_layer{}_block1'.format(i+1)] = block1
+            attention_weights['decoder_layer{}_block2'.format(i+1)] = block2
+
+        # x.shape == (batch_size, target_seq_len, d_model)
+        return x, attention_weights
+```
+
+- 디코더 구현은 앞서 인코더 구현과 동일하다. 차이가 있다면 인코더 정보 벡터와 순방향 어텐션 마스크를 추가로 입력받는다는 것이다. 이렇게 하면 트랜스포머 네트워크를 위한 인코더 디코더 모듈이 완성된다. 
+
+#### 트랜스포머 모델 클래스 구현
+
+- 이제 트랜스포머 모델에 대한 인코더와 디코더 모듈의 구현이 끝났다. 마지막으로 이 두 모듈을 이어서 시퀀스 투 시퀀스 모델 형태로 구현하면 된다. 전체 코드 구현은 다음과 같다. 
+
+```python
+class Transformer(tf.keras.Model):
+    def __init__(self, **kargs):
+        super(Transformer, self).__init__(name=kargs['model_name'])
+        self.end_token_idx = kargs['end_token_idx']
+        
+        self.encoder = Encoder(**kargs)
+        self.decoder = Decoder(**kargs)
+
+        self.final_layer = tf.keras.layers.Dense(kargs['target_vocab_size'])
+
+    def call(self, x):
+        inp, tar = x
+
+        enc_padding_mask, look_ahead_mask, dec_padding_mask = create_masks(inp, tar)
+        enc_output = self.encoder(inp, enc_padding_mask)  # (batch_size, inp_seq_len, d_model)
+
+        # dec_output.shape == (batch_size, tar_seq_len, d_model)
+        dec_output, _ = self.decoder(
+            tar, enc_output, look_ahead_mask, dec_padding_mask)
+
+        final_output = self.final_layer(dec_output)  # (batch_size, tar_seq_len, target_vocab_size)
+
+        return final_output
+    
+    def inference(self, x):
+        inp = x
+        tar = tf.expand_dims([STD_INDEX], 0)
+
+        enc_padding_mask, look_ahead_mask, dec_padding_mask = create_masks(inp, tar)        
+        enc_output = self.encoder(inp, enc_padding_mask)
+        
+        predict_tokens = list()
+        for t in range(0, MAX_SEQUENCE):
+            dec_output, _ = self.decoder(tar, enc_output, look_ahead_mask, dec_padding_mask)
+            final_output = self.final_layer(dec_output)
+            outputs = tf.argmax(final_output, -1).numpy()
+            pred_token = outputs[0][-1]
+            if pred_token == self.end_token_idx:
+                break
+            predict_tokens.append(pred_token)
+            tar = tf.expand_dims([STD_INDEX] + predict_tokens, 0)
+            _, look_ahead_mask, dec_padding_mask = create_masks(inp, tar)
+            
+        return predict_tokens
+```
+
+- 앞서 `Seq2Seq` 모델에서 구현한 모습과 크게 다르지 않지만 여기서는 트랜스포머 네트워크로 구성돼 있다. 레이어는 크게 `Encoder`, `Decoder`, 단어 인덱스를 출력할 피드 포워드 네트워크로 구성돼 있다. 이 모델에서는 크게 `call` 함수와 `inference` 함수를 선언한다. `call` 함수의 경우 학습할 때를 위해 활용되는 함수이고 `inference` 함수는 입력 텍스트에 대한 모델 추론을 위한 함수다. 먼저 `__init__` 함수부터 차근차근 함수의 구현 내용을 살펴보자.
+- 트랜스포머 모델 클래스에서는 앞서 언급한 3개의 레이어를 생성한다. 여기서 피드 포워드 레이어의 경우 출력 차원이 단어 사전의 토큰 수만큼 돼야 한다. 그리고 클래스의 멤버 변수로 `self.end_token_idx`를 선언한다. 이 변수는 마지막 `end_token`에 대한 인덱스 값을 저장하는 변수로서 `inference` 함수에서 `end_token` 이후로는 더 이상 모델 추론을 하지 않게 하는 역할을 한다.
+- `call` 함수에서는 인코더에 입력될 값과 디코더에 입력될 값이 함께 입력 파라미터 `x`에 들어간다. 인코더와 디코더에 들어갈 값은 각각 `inp`, `tar` 변수에 할당한다. 이렇게 할당한 값을 가지고 먼저 패딩 마스크와 디코더에서 사용할 순방향 마스크를 `create_mask`를 통해 받는다. 마스크 값이 준비되면 이제 입력값이 인코더, 디코더, 피드 포워드 네트워크를 거쳐 출력될 수 있게 구현한다. 이렇게 하면 출력에서는 입력에 대한 디코더 출력값을 받을 수 있게 된다. 그리고 이 출력 값을 정답 데이터와 비교해서 손실값을 구하게 될 것이다. 
+- `inference` 함수는 `call` 함수와 비슷하지만 다른 점이 하나 있다. `call` 함수의 경우 디코더에 입력할 시퀀스가 주어지지만 `inference` 함수에서는 디코더에 입력할 시퀀스를 매번 생성해야 한다. 그렇기 때문에 `inference` 시작 당시에 시작 토큰만 가지고 디코더에서 다음 토큰을 생성할 수 있게 한다. 이 생성 과정을 계속 반복할 수 있도록 for문을 뒀고, 만약 `end_token`이 나온다면 생성을 멈추게 했다. 이렇게 해서 디코더에서 생성된 토큰들을 출력하게 했다. 
+- 이제 이렇게 모델을 구현했다면 실제 모델 객체를 생성할 차례다.
+
+```python
+char2idx = prepro_configs['char2idx']
+end_index = prepro_configs['end_symbol']
+model_name = 'transformer'
+vocab_size = prepro_configs['vocab_size']
+BATCH_SIZE = 2
+MAX_SEQUENCE = 25
+EPOCHS = 30
+VALID_SPLIT = 0.1
+
+kargs = {'model_name': model_name,
+         'num_layers': 2,
+         'd_model': 512,
+         'num_heads': 8,
+         'dff': 2048,
+         'input_vocab_size': vocab_size,
+         'target_vocab_size': vocab_size,
+         'maximum_position_encoding': MAX_SEQUENCE,
+         'end_token_idx': char2idx[end_index],
+         'rate': 0.1
+        }
+        
+model = Transformer(**kargs)
+```
+
+- 모델의 각 하이퍼파라미터는 `kargs` 변수에 `dict` 객체로 저장해 모델에 입력하도록 구성했다. 이렇게 해서 간단히 모델을 생성할 수 있다.
+- 이제 모델 객체를 생성할 수 있다. 이 모델 객체를 가지고 모델 학습을 진행해 보자. 모델 학습을 위한 손실 함수 구현 및 모델 컴파일 등의 구현은 앞선 `Seq2Seq` 모델과 동일하다.
+
+```python
+loss_object = tf.keras.losses.SparseCategoricalCrossentropy(
+    from_logits=True, reduction='none')
+
+train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='accuracy')
+
+def loss(real, pred):
+    mask = tf.math.logical_not(tf.math.equal(real, 0))
+    loss_ = loss_object(real, pred)
+
+    mask = tf.cast(mask, dtype=loss_.dtype)
+    loss_ *= mask
+
+    return tf.reduce_mean(loss_)
+
+def accuracy(real, pred):
+    mask = tf.math.logical_not(tf.math.equal(real, 0))
+    mask = tf.expand_dims(tf.cast(mask, dtype=pred.dtype), axis=-1)
+    pred *= mask    
+    acc = train_accuracy(real, pred)
+
+    return tf.reduce_mean(acc)
+```
+
+- `loss` 함수와 `accuracy` 함수를 구현하고 `model.compile`에 등록한다. 이전 방식과 동일하게 패딩 영역에 대한 정보를 제외하고 `loss`와 `accuracy`를 반영할 수 있게 구현했다. 
+
+```python
+# overfitting을 막기 위한 ealrystop 추가
+earlystop_callback = EarlyStopping(monitor='val_accuracy', min_delta=0.0001, patience=10)
+# min_delta: the threshold that triggers the termination (acc should at least improve 0.0001)
+# patience: no improvment epochs (patience = 1, 1번 이상 상승이 없으면 종료)
+
+checkpoint_path = DATA_OUT_PATH + model_name + '/weights.h5'
+checkpoint_dir = os.path.dirname(checkpoint_path)
+
+# Create path if exists
+if os.path.exists(checkpoint_dir):
+    print("{} -- Folder already exists \n".format(checkpoint_dir))
+else:
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    print("{} -- Folder create complete \n".format(checkpoint_dir))
+    
+
+cp_callback = ModelCheckpoint(
+    checkpoint_path, monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True)
+```
+
+- `model.compile`을 실행하고 나면 `EarlyStopping`과 `Checkpoint` 콜백 모듈을 선언하고 `model.fit`을 통해 모델 학습을 진행하면 된다. 
+- 모델 학습을 마치면 성능 그래프를 출력하자.
+
+```python
+history = model.fit([index_inputs, index_outputs], index_targets, 
+                    batch_size=BATCH_SIZE, epochs=EPOCHS,
+                    validation_split=VALID_SPLIT, callbacks=[earlystop_callback, cp_callback])
+```
+
+```python
+plot_graphs(history, 'accuracy')
+```
 
 
+
+```python
+plot_graphs(history, 'loss')
+```
