@@ -1796,8 +1796,13 @@ history = model.fit([index_inputs, index_outputs], index_targets,
 plot_graphs(history, 'accuracy')
 ```
 
+![스크린샷 2025-03-31 오후 10 19 23](https://github.com/user-attachments/assets/5108d48f-15df-4840-a47b-ba3f6c8fa75f)
 
 
 ```python
 plot_graphs(history, 'loss')
 ```
+
+![스크린샷 2025-03-31 오후 10 19 37](https://github.com/user-attachments/assets/db7fd420-8a0b-4509-b03b-f00a31eb42a0)
+
+
