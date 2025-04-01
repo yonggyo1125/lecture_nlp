@@ -66,6 +66,48 @@ train_data.head()
 
 ![스크린샷 2025-04-01 오후 10 03 14](https://github.com/user-attachments/assets/dd12dbe4-90bb-451e-becb-1c21fd615f64)
 
+- 데이터는 `id`, `qid1`, `question1`, `question2`, `is_duplicate` 열로 구성돼 있고 `id`는 각 행 데이터의 고유한 인덱스 값이다. `qid1`과 `qid2`는 각 질문의 고유한 인덱스 값이고, `question1`과 `question2`는 각 질문의 내용을 담고 있다. `is_duplicate`는 0 또는 1을 값으로 가지는, 0이면 두개의 질문이 중복이 아니고, 1이면 두 개의 질문이 중복이라는 것을 의미한다. 데이터를 좀 더 자세히 확인하고 분석해 보자.
+- 이번에 사용할 데이터가 어떤 데이터이고, 크기는 어느 정도 되는지 알아보기 위해 데이터 파일의 이름과 크기를 각각 출력해서 확인해 보자.
 
+```python
+print("파일 크기 : ")
+for file in os.listdir(DATA_IN_PATH):
+    if 'csv' in file and 'zip' not in file:
+        print(file.ljust(30) + str(round(os.path.getsize(DATA_IN_PATH + file) / 1000000, 2)) + 'MB')
+```
 
+```python
+파일 크기 : 
+test.csv                      477.59MB
+train.csv                     63.4MB
+sample_submission.csv         22.35MB
+```
 
+- 파일 크기를 불러올 떄도 4장과 마찬가지로 해당 경로에서 각 파일을 확인한 후 파일명에 'csv'가 들어가고 'zip'이 들어가지 않는 파일들만 가져와 해당 파일의 크기를 보여준다. 
+- 파일의 크기를 보면 일반적인 데이터의 크기와는 다른 양상을 보여준다. 대부분 훈련 데이터가 평가 데이터보다 크기가 큰데, 이번에 사용할 데이터는 평가 데이터(test.csv)가 훈련 데이터(train.csv) 보다 5배 정도 더 큰 것을 알 수 있다. 평가 데이터가 큰 이유는 쿼라의 경우 질문에 대해 데이터 수가 적다면 각각을 검색을 통해 중복을 찾아내는 편법을 사용할 수 있는 데, 이러한 편법을 방지하기 위해 쿼라에서 직접 컴퓨터가 만든 질문 쌍을 평가 데이터에 임의적으로 추가했기 때문이다. 따라서 평가 데이터가 크지만 실제 질문 데이터는 얼마 되지 않는다. 그리고 캐글의 경우 예측 결과를 제출하면 점수를 받을 수 있는데, 컴퓨터가 만든 질문쌍에 대한 예측은 점수에 포함되지 않는다. 
+- 먼저 학습 데이터의 개수를 알아보자. 앞서 불러온 데이터의 길이를 출력하자.
+
+```python
+print('전체 학습데이터의 개수: {}'.format(len(train_data)))
+```
+
+```
+전체 학습데이터의 개수: 404290
+```
+
+- 결과를 보면 전체 질문 쌍의 개수는 40만 개다. 판다스는 데이터프레임과 시리즈라는 자료구조를 가지고 있다. 데이터프레임이 행렬 구조라면 시리즈는 인덱스를 가지고 있는 배열이다. 지금 하나의 데이터에 두 개의 질문이 있는 구조인데, 전체 질문(두 개의 질문)을 한번에 분석하기 위해 판다스의 시리즈를 통해 두 개의 질문을 하나로 합친다. 
+- 참고로 앞으로 진행할 분석 순서는 질문 중복 분석, 라벨 빈도 분석, 문자 분석, 단어 분석이다. 그림 첫 번째 질문 중복 분석부터 시작한다.
+
+```python
+train_set = pd.Series(train_data['question1'].tolist() + train_data['question2'].tolist()).astype(str)
+train_set.head()
+```
+
+```
+0    What is the step by step guide to invest in sh...
+1    What is the story of Kohinoor (Koh-i-Noor) Dia...
+2    How can I increase the speed of my internet co...
+3    Why am I mentally very lonely? How can I solve...
+4    Which one dissolve in water quikly sugar, salt...
+dtype: object
+```
