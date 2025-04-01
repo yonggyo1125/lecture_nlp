@@ -64,3 +64,8 @@ train_data = pd.read_csv(DATA_IN_PATH + 'train.csv')
 train_data.head()
 ```
 
+![스크린샷 2025-04-01 오후 10 03 14](https://github.com/user-attachments/assets/dd12dbe4-90bb-451e-becb-1c21fd615f64)
+
+
+
+
