@@ -285,3 +285,8 @@ plt.legend()
 plt.xlabel('Number of words', fontsize=15)
 plt.ylabel('Prabability', fontsize=15)
 ```
+
+![스크린샷 2025-04-02 오후 10 24 30](https://github.com/user-attachments/assets/6ac2c342-6064-4d59-9c5c-80dc800fb936)
+
+
+
