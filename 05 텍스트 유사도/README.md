@@ -200,3 +200,7 @@ plt.figure(figsize=(15, 10))
 plt.imshow(cloud)
 plt.axis('off')
 ```
+
+![스크린샷 2025-04-02 오후 10 03 53](https://github.com/user-attachments/assets/41fe669e-6547-4093-b0ad-a1e400973ec9)
+
+
