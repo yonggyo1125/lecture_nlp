@@ -232,3 +232,6 @@ plt.xlabel('Number of characters', fontsize=15)
 plt.ylabel('Probability', fontsize=15)
 ```
 
+![스크린샷 2025-04-02 오후 10 12 29](https://github.com/user-attachments/assets/f33ab04e-1d40-4ccc-b694-df2bfde5b6dc)
+
+
