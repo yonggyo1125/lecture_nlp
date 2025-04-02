@@ -211,3 +211,6 @@ fig, axe = plt.subplots(ncols=1)
 fig.set_size_inches(6, 3)
 sns.countplot(train_data['is_duplicate'])
 ```
+
+![스크린샷 2025-04-02 오후 10 07 42](https://github.com/user-attachments/assets/8d5f7f7e-a0d2-420c-a0f4-8a4ab59b8e82)
+
