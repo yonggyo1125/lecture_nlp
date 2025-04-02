@@ -320,3 +320,4 @@ plt.boxplot(train_word_counts,
              showmeans=True)
 ```
 
+![스크린샷 2025-04-02 오후 10 28 55](https://github.com/user-attachments/assets/a2372d13-d60f-4a28-86f0-d5a4fb7fd6ed)
