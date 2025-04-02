@@ -234,4 +234,35 @@ plt.ylabel('Probability', fontsize=15)
 
 ![스크린샷 2025-04-02 오후 10 12 29](https://github.com/user-attachments/assets/f33ab04e-1d40-4ccc-b694-df2bfde5b6dc)
 
+- 데이터의 각 질문의 길이 분포는 15\~150에 대부분 모여 있으며 길이가 150에서 급격하게 줄어드는 것을 볼 때 쿼라의 질문 길이 제한이 150 정도라는 것을 추정해 볼 수 있다. 길이가 150 이상인 데이터는 거의 없기 때문에 해당 데이터 때문에 문제가 되지는 않을 것이다.
+- 이제 이 길이값을 사용해 여러 가지 통곗값을 확인해 보자.
+
+```python
+print('질문 길이 최대 값: {}'.format(np.max(train_length)))
+print('질문 길이 평균 값: {:.2f}'.format(np.mean(train_length)))
+print('질문 길이 표준편차: {:.2f}'.format(np.std(train_length)))
+print('질문 길이 중간 값: {}'.format(np.median(train_length)))
+print('질문 길이 제 1 사분위: {}'.format(np.percentile(train_length, 25)))
+print('질문 길이 제 3 사분위: {}'.format(np.percentile(train_length, 75)))
+```
+
+```python
+질문 길이 최대 값: 1169
+질문 길이 평균 값: 59.82
+질문 길이 표준편차: 31.96
+질문 길이 중간 값: 51.0
+질문 길이 제 1 사분위: 39.0
+질문 길이 제 3 사분위: 72.0
+```
+
+- 통계값을 확인해 보면 우선 평균적으로 길이가 60 정도라는 것을 확인할 수 있다. 그리고 중간값의 경우 51 정도다. 하지만 최댓값을 확인해 보면 1169로서 평균, 중간값에 비해 매우 큰 차이를 보인다. 이런 데이터는 제외하고 학습하는 것이 좋을 것이다. 
+- 이제 데이터의 질문 길이값에 대해서도 박스 플롯 그래프를 그려서 확인해 보자.
+
+```python
+plt.figure(figsize=(12, 5))
+
+plt.boxplot(train_length,
+             labels=['char counts'],
+             showmeans=True)
+```
 
