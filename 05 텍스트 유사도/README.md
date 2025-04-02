@@ -150,4 +150,40 @@ plt.ylabel('Number of questions')
 
 ![스크린샷 2025-04-02 오후 9 54 44](https://github.com/user-attachments/assets/19bf7bac-5632-42a0-8735-19a915b3ec95)
 
+- 히스토그램을 살펴보면 우선 중복 횟수가 1인 질문들, 즉 유일한 질문이 가장 많고 대부분의 질문이 중복 횟수가 50번 이하다. 그리고 매우 큰 빈도를 가진 질문은 이상치가 될 것이다. 
+- 질문의 중복 분포를 통계치로 수치화해서 다른 방향으로 확인해 보자.
 
+```python
+print('중복 최대 개수: {}'.format(np.max(train_set.value_counts())))
+print('중복 최소 개수: {}'.format(np.min(train_set.value_counts())))
+print('중복 평균 개수: {:.2f}'.format(np.mean(train_set.value_counts())))
+print('중복 표준편차: {:.2f}'.format(np.std(train_set.value_counts())))
+print('중복 중간길이: {}'.format(np.median(train_set.value_counts())))
+# 사분위의 대한 경우는 0~100 스케일로 되어있음
+print('제 1 사분위 중복: {}'.format(np.percentile(train_set.value_counts(), 25)))
+print('제 3 사분위 중복: {}'.format(np.percentile(train_set.value_counts(), 75)))
+```
+
+```
+중복 최대 개수: 161
+중복 최소 개수: 1
+중복 평균 개수: 1.50
+중복 표준편차: 1.91
+중복 중간길이: 1.0
+제 1 사분위 중복: 1.0
+제 3 사분위 중복: 1.0
+```
+
+- 중복이 최대로 발생한 개수는 161번이고, 평균으로 보면 문장당 1.5개의 중복을 가지며, 표준편차는 1.9다. 중복이 발생하는 횟수의 평균이 1.5라는 것은 많은 데이터가 최소 1개 이상 중복돼 있음을 의미한다. 즉, 중복이 많다는 뜻이다. 이제 박스 플롯을 통해 중복 횟수와 관련해서 데이터를 직관적으로 이해해 보자.
+
+```python
+plt.figure(figsize=(12, 5))
+# 박스플롯 생성
+# 첫번째 파라메터: 여러 분포에 대한 데이터 리스트를 입력
+# labels: 입력한 데이터에 대한 라벨
+# showmeans: 평균값을 마크함
+
+plt.boxplot([train_set.value_counts()],
+             labels=['counts'],
+             showmeans=True)
+```
