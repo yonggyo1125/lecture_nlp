@@ -187,3 +187,7 @@ plt.boxplot([train_set.value_counts()],
              labels=['counts'],
              showmeans=True)
 ```
+
+![스크린샷 2025-04-02 오후 9 59 34](https://github.com/user-attachments/assets/b326d103-7091-4306-abc7-3ca9291efb87)
+
+
