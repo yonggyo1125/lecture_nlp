@@ -214,3 +214,21 @@ sns.countplot(train_data['is_duplicate'])
 
 ![스크린샷 2025-04-02 오후 10 07 42](https://github.com/user-attachments/assets/8d5f7f7e-a0d2-420c-a0f4-8a4ab59b8e82)
 
+- 라벨값의 개수를 확인해 보면 총 40만 개의 데이터에서 중복이 아닌 데이터가 25만 개이고, 중복된 데이터가 15만 개다. 이 상태로 학습한다면 중복이 아닌 데이터 25만 개에 의존도가 높아지면서 데이터가 한쪽 라벨로 편향된다. 이러한 경우 학습이 원활하게 되지 않을 수도 있으므로 최대한 라벨의 개수를 균형 있게 맞춰준 후 진행하는 것이 좋다. 많은 수의 데이터를 줄인 후 학습할 수도 있고, 적은 수의 데이터를 늘린 후 학습할 수도 있다.
+- 다음으로 텍스트 데이터의 길이를 분석해보자. 이전 장에서 진행한 것과 동일하게 문자(characters) 단위로 먼저 길이를 분석한 후 단어 단어로 길이를 분석하겠다. 우선 문자 단위로 분석하기 위해 각 데이터의 길이를 담은 변수를 생성한다. 
+
+```python
+train_length = train_set.apply(len)
+```
+
+- 각 데이터의 길이값을 담은 변수를 사용해 히스토그램을 그려보자.
+
+```python
+plt.figure(figsize=(15, 10))
+plt.hist(train_length, bins=200, range=[0,200], facecolor='r', density=True, label='train')
+plt.title("Normalised histogram of character count in questions", fontsize=15)
+plt.legend()
+plt.xlabel('Number of characters', fontsize=15)
+plt.ylabel('Probability', fontsize=15)
+```
+
