@@ -111,3 +111,39 @@ train_set.head()
 4    Which one dissolve in water quikly sugar, salt...
 dtype: object
 ```
+
+- 각 질문을 리스트로 만든 뒤 하나의 시리즈 데이터 타입으로 만든다. 결과를 보면 위와 같은 구조로 합쳐졌다. 기존 데이터에서 질문 쌍의 수가 40만 개 정도이고 각각 질문이 두 개 이므로 대략 80만 개 정도의 질문이 있다. 
+- 이제 질문들의 중복 여부를 확인해 보자. 넘파이를 이용해 중복을 제거한 총 질문의 수와 반복해서 나오는 질문의 수를 확인한다. 
+
+```python
+print('교육 데이터의 총 질문 수: {}'.format(len(np.unique(train_set))))
+print('반복해서 나타나는 질문의 수: {}'.format(np.sum(train_set.value_counts() > 1)))
+```
+
+```
+교육 데이터의 총 질문 수: 537361
+반복해서 나타나는 질문의 수: 111873
+```
+
+- 중복을 제거한 유일한 질문값만 확인하기 위해 넘파이 `unique` 함수를 사용했고, 중복되는 질문의 정확한 개수를 확인하기 위해 2개 이상의 값을 가지는 질문인 `value_counts`가 2 이상인 값의 개수를 모두 더했다. 결과를 보면 80만 개의 데이터에서 53만 개가 유니크 데이터이므로 27만 개가 중복돼 있음을 알 수 있고, 27만 개의 데이터는 11만 개 데이터의 고유한 질문으로 이뤄져 있음을 알 수 있다. 
+- 이를 맷플롯립을 통해 시각화해 보자. 그래프의 크기는 너비가 12인치이고, 길이가 5인치이며 히스토그램은 `question` 값들의 개수를 보여주며 y축의 크기 범위를 줄이기 위해 `log` 값으로 크기를 줄인다. `x` 값은 중복 개수이며 `y` 값은 동일한 중복 횟수를 가진 질문의 개수를 의미한다.
+
+```python
+# 그래프에 대한 이미지 사이즈 선언
+# figsize: (가로, 세로) 형태의 튜플로 입력
+plt.figure(figsize=(12, 5))
+# 히스토그램 선언
+# bins: 히스토그램 값들에 대한 버켓 범위
+# range: x축 값의 범위
+# alpha: 그래프 색상 투명도
+# color: 그래프 색상
+# label: 그래프에 대한 라벨
+plt.hist(train_set.value_counts(), bins=50, alpha=0.5, color= 'r', label='word')
+plt.yscale('log')
+# 그래프 제목
+plt.title('Log-Histogram of question appearance counts')
+# 그래프 x 축 라벨
+plt.xlabel('Number of occurrences of question')
+# 그래프 y 축 라벨
+plt.ylabel('Number of questions')
+```
