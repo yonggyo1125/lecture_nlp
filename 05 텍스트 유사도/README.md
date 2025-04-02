@@ -203,4 +203,11 @@ plt.axis('off')
 
 ![스크린샷 2025-04-02 오후 10 03 53](https://github.com/user-attachments/assets/41fe669e-6547-4093-b0ad-a1e400973ec9)
 
+- 워드클라우드로 그려진 결과를 확인해 보면 best, way, good, difference 등의 단어들이 질문을 할 때 일반적으로 가장 많이 사용된다는 것을 알 수 있다. 특이한 점은 해당 결과에서 'Donald Trump'가 존재하는 것이다. 'Donald Trump'가 존재하는 이유는 선거 기간 중 학습 데이터를 만들었기 때문이라고 많은 캐글러들은 말하고 있다.
+- 이제 질문 텍스트가 아닌 데이터의 라벨인 'is_duplicate'에 대해 알아보자. 라벨의 경우 질문이 중복인 경우 1 값과 중복이 아닌 0 값이 존재했다. 라벨들의 횟수에 대해 그래프를 그려보자.
 
+```python
+fig, axe = plt.subplots(ncols=1)
+fig.set_size_inches(6, 3)
+sns.countplot(train_data['is_duplicate'])
+```
