@@ -288,5 +288,35 @@ plt.ylabel('Prabability', fontsize=15)
 
 ![스크린샷 2025-04-02 오후 10 24 30](https://github.com/user-attachments/assets/6ac2c342-6064-4d59-9c5c-80dc800fb936)
 
+- 히스토그램을 보면 대부분 10개 정도의 단어로 구성된 데이터가 가장 많다는 것을 볼 수 있다. 20개 이상의 단어로 구성된 데이터는 매우 적다는 것을 확인할 수 있다. 데이터의 단어 개수에 대해서도 각 통곗값을 확인해 보자.
 
+```python
+print('질문 단어 개수 최대 값: {}'.format(np.max(train_word_counts)))
+print('질문 단어 개수 평균 값: {:.2f}'.format(np.mean(train_word_counts)))
+print('질문 단어 개수 표준편차: {:.2f}'.format(np.std(train_word_counts)))
+print('질문 단어 개수 중간 값: {}'.format(np.median(train_word_counts)))
+print('질문 단어 개수 제 1 사분위: {}'.format(np.percentile(train_word_counts, 25)))
+print('질문 단어 개수 제 3 사분위: {}'.format(np.percentile(train_word_counts, 75)))
+print('질문 단어 개수 99 퍼센트: {}'.format(np.percentile(train_word_counts, 99)))
+```
+
+```
+질문 단어 개수 최대 값: 237
+질문 단어 개수 평균 값: 11.06
+질문 단어 개수 표준편차: 5.89
+질문 단어 개수 중간 값: 10.0
+질문 단어 개수 제 1 사분위: 7.0
+질문 단어 개수 제 3 사분위: 13.0
+질문 단어 개수 99 퍼센트: 31.0
+```
+
+- 데이터의 문자 단위 길이를 확인했을 때와 비슷한 양상을 보인다. 우선 평균 개수의 경우 히스토그램에서도 확인했던 것처럼 11개가 단어 개수의 평균이다. 그리고 중간값의 경우 평균보다 1개 적은 10개를 가진다. 문자 길이의 최댓값인 경우 1100 정도의 값을 보인다. 단어 길이는 최대 237개다. 해당 데이터의 경우 지나치게 긴 문자 길이와 단어 개수를 보여준다. 박스 플롯을 통해 데이터 분포를 다시한번 확인하자.
+
+```python
+plt.figure(figsize=(12, 5))
+
+plt.boxplot(train_word_counts,
+             labels=['counts'],
+             showmeans=True)
+```
 
