@@ -147,3 +147,7 @@ plt.xlabel('Number of occurrences of question')
 # 그래프 y 축 라벨
 plt.ylabel('Number of questions')
 ```
+
+![스크린샷 2025-04-02 오후 9 54 44](https://github.com/user-attachments/assets/19bf7bac-5632-42a0-8735-19a915b3ec95)
+
+
