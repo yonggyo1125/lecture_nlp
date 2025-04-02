@@ -268,5 +268,20 @@ plt.boxplot(train_length,
 
 ![스크린샷 2025-04-02 오후 10 20 19](https://github.com/user-attachments/assets/f572794a-0645-4478-b740-a42ca072f93c)
 
+- 분포를 보면 문자 수의 이상치 데이터가 너무 많이 분포해서 박스 플롯의 다른 값을 확인하기 조차 어려운 상태다. 앞서 확인한 데이터의 최대, 평균, 중간 등을 계산한 결과 박스 플롯을 비교해 보자.
+- 이제 문자를 한 단위로 하는 것이 아니라 각 데이터의 단어 개수를 하나의 단위로 사용해 길이값을 분석해 보자. 하나의 단어로 나누는 기준은 단순히 띄어쓰기로 정의한다. 우선 각 데이터에 대해 단어의 개수를 담은 변수를 정의하자. 
 
+```python
+train_word_counts = train_set.apply(lambda x:len(x.split(' ')))
+```
 
+- 띄어쓰기를 기준으로 나눈 단어의 개수를 담은 변수를 정의했다. 이제 이 값을 사용해 앞에서 했던 것과 동일하게 히스토그램을 그려보자.
+
+```python
+plt.figure(figsize=(15, 10))
+plt.hist(train_word_counts, bins=50, range=[0, 50], facecolor='r', density=True, label='train')
+plt.title('Normalised histogram of word count in questions', fontsize=15)
+plt.legend()
+plt.xlabel('Number of words', fontsize=15)
+plt.ylabel('Prabability', fontsize=15)
+```
