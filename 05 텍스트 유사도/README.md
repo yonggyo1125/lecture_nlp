@@ -190,4 +190,13 @@ plt.boxplot([train_set.value_counts()],
 
 ![스크린샷 2025-04-02 오후 9 59 34](https://github.com/user-attachments/assets/b326d103-7091-4306-abc7-3ca9291efb87)
 
+- 위 분포는 어떠한가? 중복 횟수의 이상치(outliers)가 너무 넓고 많이 분포해서 박스 플롯의 다른 값을 확인하기조차 어려운 데이터다. 앞서 확인한 데이터의 평균과 최대, 최소 등을 계산한 값과 박스 플롯의 그림을 비교해보자.
+- 위에서는 중복 횟수와 관련해서 데이터를 살펴봤다면 이제는 데이터에 어떤 단어가 포함됐는지 살펴보자. 어떤 단어가 많이 나오는지 확인하기 위해 워드클라우드를 사용한다. 이를 위해 `train_set` 데이터를 사용한다. 
 
+```python
+from wordcloud import WordCloud
+cloud = WordCloud(width=800, height=600).generate(" ".join(train_set.astype(str)))
+plt.figure(figsize=(15, 10))
+plt.imshow(cloud)
+plt.axis('off')
+```
