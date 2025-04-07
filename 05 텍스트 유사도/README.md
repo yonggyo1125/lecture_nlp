@@ -321,3 +321,110 @@ plt.boxplot(train_word_counts,
 ```
 
 ![스크린샷 2025-04-02 오후 10 28 55](https://github.com/user-attachments/assets/a2372d13-d60f-4a28-86f0-d5a4fb7fd6ed)
+
+- 문자 길이에 대한 박스 플롯과 비슷한 모양의 그래프를 보여준다. 쿼라 데이터의 경우 이상치가 넓고 많이 분포돼 있음을 알수 있다. 
+- 이제 대부분의 분석이 끝났다. 마지막으로 몇 가지 특정 경우에 대한 비율을 확인해 보자. 특수 문자 중 구두점, 물음표, 마침표가 사용된 비율과 수학 기호가 사용된 비율, 대/소문자의 비율을 확인해 본다.
+
+```python
+qmarks = np.mean(train_set.apply(lambda x: '?' in x)) # 물음표가 구두점으로 쓰임
+math = np.mean(train_set.apply(lambda x: '[math]' in x)) # []
+fullstop = np.mean(train_set.apply(lambda x: '.' in x)) # 마침표
+capital_first = np.mean(train_set.apply(lambda x: x[0].isupper())) #  첫번째 대문자
+capitals = np.mean(train_set.apply(lambda x: max([y.isupper() for y in x]))) # 대문자가 몇개
+numbers = np.mean(train_set.apply(lambda x: max([y.isdigit() for y in x]))) # 숫자가 몇개
+                  
+print('물음표가있는 질문: {:.2f}%'.format(qmarks * 100))
+print('수학 태그가있는 질문: {:.2f}%'.format(math * 100))
+print('마침표를 포함한 질문: {:.2f}%'.format(fullstop * 100))
+print('첫 글자가 대문자 인 질문: {:.2f}%'.format(capital_first * 100))
+print('대문자가있는 질문: {:.2f}%'.format(capitals * 100))
+print('숫자가있는 질문: {:.2f}%'.format(numbers * 100))
+```
+
+```
+물음표가있는 질문: 99.87%
+수학 태그가있는 질문: 0.12%
+마침표를 포함한 질문: 6.31%
+첫 글자가 대문자 인 질문: 99.81%
+대문자가있는 질문: 99.95%
+숫자가있는 질문: 11.83%
+```
+
+- 대문자가 첫 글자인 질문과 물음표를 동반하는 질문이 99% 이상을 차지한다. 전체적으로 질문들이 물음표와 대문자로 된 첫 문자를 가지고 있음을 알 수 있다. 그럼 여기서 생각해볼 부분이 있다. 즉, 모든 질문이 보편적으로 가지고 있는 이 특징의 유지 여부에 대해서인데, 모두가 가지고 있는 보편적인 특징은 여기서는 제거한다.
+- 지금까지 데이터 분석을 통해 데이터의 구조와 분포를 확인했다. 질문 데이터의 중복 여부 분포, 즉 라벨의 분포가 크게 차이나서 학습에 편향을 제공하므로 좋지 않은 영향을 줄 수 있다. 따라서 전처리 과정에서 분포를 맞추는 것이 좋다. 그리고 대부분의 질문에 포함된 첫 번째 대문자는 소문자로 통일한다. 물음표 같은 구두점은 삭제하는 식으로 보편적인 특성은 제거함으로써 필요한 부분만 학습하게 하는 이점을 얻을 수 있다.
+
+
+### 데이터 전처리 
+
+- 앞서 데이터를 분석한 결과를 바탕으로 데이터를 전처리해 보자. 먼저 전처리 과정에서 사용할 라이브러리를 불러온다. 
+
+```python
+import pandas as pd
+import numpy as np
+import re
+import json
+
+from tensorflow.python.keras.preprocessing.text import Tokenizer
+from tensorflow.python.keras.preprocessing.sequence import pad_sequences
+```
+
+- 판다스와 넘파이, re, 텐서플로의 케라스 라이브러리를 사용한다. 데이터를 분석할 때와 마찬가지로 경로를 설정하고 학습 데이터를 불러오자.
+
+```python
+DATA_IN_PATH = './data_in/'
+FILTERS = "([~.,!?\"':;)(])"
+MAX_SEQUENCE_LENGTH = 31
+
+change_filter = re.compile(FILTERS)
+
+train_data = pd.read_csv(DATA_IN_PATH + 'train.csv', encoding='utf-8')
+```
+
+- 맨 먼저 진행할 전처리 과정은 앞서 분석 과정에서 확인했던 내용 중 하나인 라벨 개수의 균형을 맞추는 것이다. 앞서 분석 과정에서 확인했듯이 중복이 아닌 데이터의 개수가 더욱 많기 때문에 이 경우에 해당하는 데이터의 개수를 줄인 후 분석을 진행하겠다. 먼저 중복인 경우와 아닌 경우로 데이터를 나눈 후 중복이 아닌 개수가 비슷하도록 데이터의 일부를 다시 뽑는다.
+
+```python
+train_pos_data = train_data.loc[train_data['is_duplicate'] == 1]
+train_neg_data = train_data.loc[train_data['is_duplicate'] == 0]
+
+class_difference = len(train_neg_data) - len(train_pos_data)
+sample_frac = 1 - (class_difference / len(train_neg_data))
+
+train_neg_data = train_neg_data.sample(frac = sample_frac)
+```
+
+- 먼저 라벨에 따라 질문이 유사한 경우와 아닌 경우에 대한 데이터셋으로 구분한다. 데이터프레임 객체의 `loc`라는 기능을 활용해 데이터를 추출한다. 이 기능을 사용해 라벨이 1인 경우와 0인 경우를 분리해서 변수를 생성한다. 이제 두 변수의 길이를 맞춰야 한다. 우선 두 변수의 길이의 차이를 계산하고 샘플링하기 위해 적은 데이터(중복 질문)의 개수가 많은 데이터(중복이 아닌 질문)에 대한 비율을 계산한다. 그리고 개수가 많은 데이터에 대해 방금 구한 비율 만큼 샘플링하면 두 데이터 간의 개수가 거의 비슷해진다. 샘플링한 이후 각 데이터의 개수를 확인해 보자.
+
+```python
+print("중복 질문 개수: {}".format(len(train_pos_data)))
+print("중복이 아닌 질문 개수: {}".format(len(train_neg_data)))
+```
+
+```
+중복 질문 개수: 149263
+중복이 아닌 질문 개수: 149263
+```
+
+- 샘플링한 후 데이터의 개수가 동일해졌다. 이제 해당 데이터를 사용하면 균형 있게 학습할 수 있을 것이다. 우선 라벨에 따라 나눠진 데이터를 다시 하나로 합치자.
+
+```python
+train_data = pd.concat([train_neg_data, train_pos_data])
+```
+
+- 이렇게 비율을 맞춘 데이터를 활용해 데이터 전처리를 진행하자. 앞서 전처리에서 분석한 대로 문장 문자열에 대한 전처리를 먼저 진행한다. 우선 학습 데이터의 질문 쌍을 하나의 질문 리스트로 만들고, 정규 표현식을 사용해 물음표와 마침표 같은 구두점 및 기호를 제거하고 모든 문자를 소문자로 바꾸는 처리를 한다.
+- 각 데이터에 있는 두 개의 질문을 각각 리스트 형태로 만든 후 각 리스트에 대해 전처리를 진행해서 두 개의 전처리된 리스트를 만들자.
+
+```python
+change_filter = re.compile(FILTERS)
+
+questions1 = [str(s) for s in train_data['question1']]
+questions2 = [str(s) for s in train_data['question2']]
+
+filtered_questions1 = list()
+filtered_questions2 = list()
+
+for q in questions1:
+     filtered_questions1.append(re.sub(change_filter, "", q).lower())
+        
+for q in questions2:
+     filtered_questions2.append(re.sub(change_filter, "", q).lower())
+```
