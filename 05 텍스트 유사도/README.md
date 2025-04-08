@@ -373,7 +373,6 @@ from tensorflow.python.keras.preprocessing.sequence import pad_sequences
 ```python
 DATA_IN_PATH = './data_in/'
 FILTERS = "([~.,!?\"':;)(])"
-MAX_SEQUENCE_LENGTH = 31
 
 change_filter = re.compile(FILTERS)
 
@@ -428,3 +427,154 @@ for q in questions1:
 for q in questions2:
      filtered_questions2.append(re.sub(change_filter, "", q).lower())
 ```
+
+- 물음표와 마침표 같은 기호에 대해 정규 표현식으로 전처리하기 위해 `re` 라이브러리를 활용한다. 먼저 정규 표현식을 사용할 패턴 객체를 만들어야 한다. `re.compile` 함수를 사용해 패턴 객체를 만든다. 이때 함수 인자에는 내가 찾고자 하는 문자열 패턴에 대한 내용을 입력한다. `FILTERS` 변수는 물음표와 마침표를 포함해서 제거하고자 하는 기호의 집합을 정규 표현식으로 나타낸 문자열이다. 이렇게 정의한 패턴은 정규 표현식의 컴파일 함수를 사용해 컴파일해 둔다. 
+- 그리고 데이터의 두 질문을 각 리스트로 만든 후, 각 리스트에 대해 전처리를 진행한다. 앞서 정의한 필터에 해당하는 문자열을 제거하고 모든 알파벳 문자를 소문자로 바꾼다. 이렇게 각 질문 리스트에 대해 전처리를 진행한 결과를 두 개의 변수에 저장한다.
+- 이렇게 텍스트를 정제하는 작업을 끝냈다. 이제 남은 과정은 정제된 텍스트 데이터를 토크나이징하고 각 단어를 인덱스로 바꾼 후, 전체 데이터의 길이를 맞추기 위해 정의한 최대 길이보다 긴 문장은 자르고 짧은 문장은 패딩 처리를 하는 것이다.
+- 문자열 토크나이징은 앞서와 동일한 방법으로 텐서플로 케라스에서 제공하는 자연어 전처리 모듈을 활용한다. 이때 4장과 다른 점은 토크나이징 객체를 만들 때는 두 질문 텍스트를 합친 리스트에 대해 적용하고, 토크나이징은 해당 객체를 활용해 각 질문에 대해 따로 진행한다는 것이다. 이러한 방법을 사용하는 이유는 두 질문에 대해 토크나이징 방식을 동일하게 진행하고, 두 질문을 합쳐 전체 단어 사전을 만들기 위해서다. 토크나이징 이후에는 패딩 처리를 한 벡터화를 진행할 것이다.
+
+```python
+tokenizer = Tokenizer()
+tokenizer.fit_on_texts(filtered_questions1 + filtered_questions2)
+```
+
+- 이렇게 생성한 토크나이징 객체를 두 질문 리스트에 적용해 각 질문을 토크나이징하고 단어들을 각 단어의 인덱스로 변환하자.
+
+```python
+questions1_sequence = tokenizer.texts_to_sequences(filtered_questions1)
+questions2_sequence = tokenizer.texts_to_sequences(filtered_questions2)
+```
+
+- 단어 인덱스로 이뤄진 벡터로 바꾼 값을 확인해 보면 어떤 구조로 바뀌었는지 확인할 수 있을 것이다. 이제 모델에 적용하기 위해 특정 길이로 동일하게 맞춰야 한다. 따라서 최대 길이를 정한 후 그 길이보다 긴 질문은 자르고, 짧은 질문은 부족한 부분을 0으로 채우는 패딩 과정을 진행하자.
+
+```python
+MAX_SEQUENCE_LENGTH = 31
+
+q1_data = pad_sequences(questions1_sequence, maxlen=MAX_SEQUENCE_LENGTH, padding='post')
+q2_data = pad_sequences(questions2_sequence, maxlen=MAX_SEQUENCE_LENGTH, padding='post')
+```
+
+- 최대 길이의 경우 앞서 데이터 분석에서 확인했던 단어 개수 99퍼센트인 31로 설정했다. 이렇게 설정한 이유는 이상치를 뺀 나머지를 포함하기 위해서다(다양한 값으로 실험했을 때 이 값이 가장 좋은 값이었다). 전처리 모듈의 패딩 함수를 사용해 최대 길이로 자르고 짧은 데이터에 대해서는 데이터 뒤에 패딩값을 채워넣었다.
+- 전처리가 끝난 데이터를 저장한다. 저장하기 전에 라벨값과 단어 사전을 저장하기 위해 값을 저장한 후 각 데이터의 크기를 확인해 보자.
+
+```python
+word_vocab = {}
+word_vocab = tokenizer.word_index 
+word_vocab["<PAD>"] = 0
+
+labels = np.array(train_data['is_duplicate'], dtype=int)
+
+print('Shape of question1 data: {}'.format(q1_data.shape))
+print('Shape of question2 data:{}'.format(q2_data.shape))
+print('Shape of label: {}'.format(labels.shape))
+print("Words in index: {}".format(len(word_vocab)))
+```
+
+```
+Shape of question1 data: (298526, 31)
+Shape of question2 data:(298526, 31)
+Shape of label: (298526,)
+Words in index: 76504
+```
+
+- 두 개의 질문 문장의 경우 각각 길이를 31로 설정했고, 단어 사전의 길이인 전체 단어 개수는 76,605개로 돼 있다. 그리고 단어 사전과 전체 단어의 개수는 딕셔너리 형태로 저장해 두자.
+
+```python
+data_configs = {}
+data_configs['vocab'] = word_vocab
+data_configs['vocab_size'] = len(word_vocab)
+```
+
+- 이제 각 데이터를 모델링 과정에서 사용할 수 있게 저장하면 된다. 저장할 파일명을 지정한 후 각 데이터의 형태에 맞는 형식으로 저장하자.
+
+```python
+TRAIN_Q1_DATA = 'train_q1.npy'
+TRAIN_Q2_DATA = 'train_q2.npy'
+TRAIN_LABEL_DATA = 'train_label.npy'
+DATA_CONFIGS = 'data_configs.json'
+
+np.save(open(DATA_IN_PATH + TRAIN_Q1_DATA, 'wb'), q1_data)
+np.save(open(DATA_IN_PATH + TRAIN_Q2_DATA , 'wb'), q2_data)
+np.save(open(DATA_IN_PATH + TRAIN_LABEL_DATA , 'wb'), labels)
+
+json.dump(data_configs, open(DATA_IN_PATH + DATA_CONFIGS, 'w'))
+```
+
+- 넘파이의 `save` 함수를 활용해 각 질문과 라벨 데이터를 저장한다. 딕셔너리 형태의 데이터 정보는 json 파일로 저장했다. 이렇게 하면 학습할 모델에 대한 데이터 전처리가 완료된다. 전처리한 데이터는 뒤에 모델 학습을 하는 과정에서 손쉽게 활용될 것이다. 이제 평가 데이터에 대해서도 앞의 전처리 과정을 동일하게 진행한 후 전처리한 데이터를 저장하자. 우선 전처리할 평가 데이터를 불러오자.
+
+```python
+test_data = pd.read_csv(DATA_IN_PATH + 'test.csv', encoding='utf-8')
+# test_data = test_data.drop(test_data.tail(1217679).index,inplace=True) # drop last n rows
+valid_ids = [type(x) ==int for x in test_data.test_id] 
+test_data = test_data[valid_ids].drop_duplicates()
+```
+
+- 우선 평가 데이터에 대해 텍스트를 정제하자. 평가 데이터 역시 두 개의 질문이 존재한다. 따라서 각 질문을 따로 리스트로 만든 후 전처리할 것이다. 앞서 확인했듯이 평가 데이터의 길이가 학습 데이터와 비교했을 때 매우 길었다. 따라서 학습 데이터 때와 달리 시간이 많이 소요될 것이다.
+
+```python
+test_questions1 = [str(s) for s in test_data['question1']]
+test_questions2 = [str(s) for s in test_data['question2']]
+
+filtered_test_questions1 = list()
+filtered_test_questions2 = list()
+
+for q in test_questions1:
+     filtered_test_questions1.append(re.sub(change_filter, "", q).lower())
+        
+for q in test_questions2:
+     filtered_test_questions2.append(re.sub(change_filter, "", q).lower())
+```
+
+- 정제한 평가 데이터를 인덱스 벡터로 만든 후 동일하게 패딩 처리를 하면 된다. 이때 사용하는 토크나이징 객체는 이전에 학습 데이터에서 사용했던 객체를 사용해야 동일한 인덱스를 가진다. 
+
+```python
+test_questions1_sequence = tokenizer.texts_to_sequences(filtered_test_questions1)
+test_questions2_sequence = tokenizer.texts_to_sequences(filtered_test_questions2)
+
+test_q1_data = pad_sequences(test_questions1_sequence, maxlen=MAX_SEQUENCE_LENGTH, padding='post')
+test_q2_data = pad_sequences(test_questions2_sequence, maxlen=MAX_SEQUENCE_LENGTH, padding='post')
+```
+
+- 평가 데이터의 경우 라벨이 존재하지 않으므로 라벨은 저장할 필요가 없다. 그리고 평가 데이터에 대한 단어 사전 정보도 이미 학습 데이터 전처리 과정에서 저장했기 때문에 추가로 저장할 필요가 없다. 하지만 평가 데이터에 대한 결과를 캐글에 제출할 때를 생각해보면 평가 데이터의 id 값이 필요하다. 따라서 평가 데이터의 id 값을 넘파이 배열로 만들자. 그리고 평가 데이터를 전처리한 값들의 크기를 출력해보자.
+
+```python
+test_id = np.array(test_data['test_id'])
+
+print('Shape of question1 data: {}'.format(test_q1_data.shape))
+print('Shape of question2 data:{}'.format(test_q2_data.shape))
+print('Shape of ids: {}'.format(test_id.shape))
+```
+
+```
+Shape of question1 data: (2345796, 31)
+Shape of question2 data:(2345796, 31)
+Shape of ids: (2345796,)
+```
+
+- 평가 데이터도 마찬가지로 전체 문장의 길이를 11로 맞춰서 전처리를 마무리했다. 이제 전처리한 평가 데이터를 파일로 저장하자. 두 개의 질문 데이터와 평가 id 값을 각각 넘파이 파일로 저장하자.
+
+```
+TEST_Q1_DATA = 'test_q1.npy'
+TEST_Q2_DATA = 'test_q2.npy'
+TEST_ID_DATA = 'test_id.npy'
+
+np.save(open(DATA_IN_PATH + TEST_Q1_DATA, 'wb'), test_q1_data)
+np.save(open(DATA_IN_PATH + TEST_Q2_DATA , 'wb'), test_q2_data)
+np.save(open(DATA_IN_PATH + TEST_ID_DATA , 'wb'), test_id)
+```
+
+- 이제 모든 전처리 과정이 끝났다. 본격적으로 질문간의 유사도를 측정하기 위한 모델을 만들어 보자. 모델은 총 세 가지의 종류를 만들어 보겠다. 먼저 XG 부스트 모델을 만들어 텍스트 유사도 문제를 해결해 보자.
+
+## 모델링
+
+> 앞서 전처리한 데이터를 사용해 본격적으로 텍스트 유사도를 측정하기 위한 모델을 만들자. 여기서는 앞서 언급한 대로 총 세 개의 모델을 직접 구현하고 성능을 측정해서 모델 간의 성능을 비교해볼 것이다. 맨 처음 구현할 모델은 XG 부스트 모델이며, 나머지 두 개의 모델은 딥러닝 기반의 모델로서 하나는 합성곱 신경망을 활용한 모델이고 다른 하나는 맨해튼 거리를 활용하는 `LSTM` 모델인 `MaLSTM` 모델이다.
+
+### XG 부스트 텍스트 유사도 분석 모델
+
+- 맨 먼저 사용할 모델은 앙상블 모델 중 하나인 XG 부스트 모델이다. 해당 모델을 사용해서 데이터의 주어진 두 질문 문장 사이의 유사도를 측정해서 두 질문이 중복인지 아닌지를 판단할 수 있게 만들 것이다. 우선 XG 부스트 모델이 어떤 모델인지 먼저 알아보자.
+
+#### 모델 소개
+
+- XG 부스트란 `eXtream Gradient Boosting`의 약자로 최근 캐글 사용자에게 큰 인기를 얻고 있는 모델 중 하나다. XG 부스트는 앙상블의 한 방법인 부스팅(Boosting) 기법을 사용하는 방법이라서 XG 부스트에 대해 알아보기 전에 부스팅 기법에 대해 먼저 알아보자.
+- 머신러닝 혹은 통계학에서 앙상블 기법이란 여러 개의 학습 알고리즘을 사용해 더 좋은 성능을 얻는 방법을 뜻한다. 앙상블 기법에는 배깅과 부스팅이라는 방법이 있다. 배깅에 대해 먼저 설명하면 배깅이란 여러 개의 학습 알고리즘, 모델을 통해 각각 결과를 예측하고 모든 결과를 동등하게 보고 취합해서 결과를 얻는 방식이다. 예를 들면 4장에서 사용했던 랜덤 포레스트의 경우 여러 개의 의사결정 트리 결괏값의 평균을 통해 결과를 얻는 배깅(Bagging)이라는 방법을 사용했다.
+- 다음으로 부스팅에 대해 알아보자. 배깅의 경우 여러 알고리즘, 모델의 결과를 다 동일하게 취합한다고 했다. 이와 다르게 부스팅은 각 결과를 순차적으로 취합하는데, 단순히 하나씩 취합하는 방법이 아니라 이전 알고리즘, 모델이 학습 후 잘못 예측한 부분에 가중치를 줘서 다시 모델로 가서 학습하는 방식이다. 다음 그림을 보면 배깅과 부스팅에 대해 좀 더 직관적으로 이해할 수 있을 것이다.
