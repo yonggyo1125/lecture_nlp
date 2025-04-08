@@ -581,3 +581,79 @@ np.save(open(DATA_IN_PATH + TEST_ID_DATA , 'wb'), test_id)
 
 ![스크린샷 2025-04-08 오후 10 06 36](https://github.com/user-attachments/assets/43311549-8b4c-408e-9c5d-41a0e6cc3aaa)
 
+- 그림에서 싱글이라고 나와 있는 부분은 앙상블 기법이 아니라 단순히 하나의 모델만으로 결과를 내는 방법이다. 앞에서 사용했던 `CNN`, `RNN` 등이 싱글에 해당한다. 
+- 이렇게 해서 부스팅이 어떤 모델을 뜻하는지 알아봤다. XG 부스트는 부스팅 기법 중 트리 부스팅(Tree Boosting) 기법을 활용한 모델이다. 여기서 말하는 트리 부스팅이 무엇인지 알아보기 위해 4장에서 알아본 랜덤 포레스트를 생각해보자. 랜덤 포레스트 모델이란 여러 개의 의사결정 트리를 사용해 결과를 평균 내는 방법이라 배웠다. 따라서 랜덤 포레스트는 배깅에 해당하는 기법이었는데, 트리 부스팅은 동일한 원리에 부스팅 방식을 적용했다고 생각하면 된다. 즉, 트리 부스팅 기법이란 여러 개의 의사결정 트리를 사용하지만 단순히 결과를 평균내는 것이 아니라 결과를 보고 오답에 대해 가중치를 부여한다. 그리고 가중치가 적용된 오답에 대해서는 관심을 가지고 정답이 될 수 있도록 결과를 만들고 해당 결과에 대한 다른 오답을 찾아 다시 똑같은 작업을 반복적으로 진행하는 것이다.
+- 최종적으로 XG 부스트란 이러한 트리 부스팅 방식에 경사 하강법을 통해 최적화하는 방법이다. 그리고 연산량을 줄이기 위해 의사결정 트리를 구성할 때 병렬 처리를 사용해 빠른 시간에 학습이 가능하다.
+- 모델에 대한 설명을 들었을 때는 복잡해 보이고 사용하기 어려워 보일 수 있지만 이미 XG 부스트를 구현해둔 라이브러리를 사용하면 매우 쉽게 사용할 수 있다. 이제 모델을 사용하는 방법을 알아보자.
+
+#### 모델 구현
+
+- 이제 본격적으로 XG 부스트 모델을 직접 구현해 보자. 여기서는 사이킷런이나 텐서플로 라이브러리가 아닌 XG 부스트 모델만을 위한 라이브러리를 사용해서 구현하겠다. 우선 전처리한 데이터를 불러오자.
+
+```python
+import pandas as pd
+import numpy as np
+import os
+
+import json
+
+
+DATA_IN_PATH = './data_in/'
+DATA_OUT_PATH = './data_out/'
+
+TRAIN_Q1_DATA_FILE = 'train_q1.npy'
+TRAIN_Q2_DATA_FILE = 'train_q2.npy'
+TRAIN_LABEL_DATA_FILE = 'train_label.npy'
+
+# 훈련 데이터 가져오는 부분이다.
+train_q1_data = np.load(open(DATA_IN_PATH + TRAIN_Q1_DATA_FILE, 'rb'))
+train_q2_data = np.load(open(DATA_IN_PATH + TRAIN_Q2_DATA_FILE, 'rb'))
+train_labels = np.load(open(DATA_IN_PATH + TRAIN_LABEL_DATA_FILE, 'rb'))
+```
+
+- 넘파이 파일로 저장한 전처리 데이터를 불러왔다. 데이터의 경우 각 데이터에 대해 두 개의 질문이 주어져 있는 형태다. 현재는 두 질문이 따로 구성돼 있는데 이를 하나씩 묶어 하나의 질문 쌍으로 만들어야 한다. 
+
+```python
+train_input = np.stack((train_q1_data, train_q2_data), axis=1) 
+```
+
+- 넘파이의 stack 함수를 사용해 두 질문을 하나의 쌍으로 만들었다. 예를 들어, 질문 \[A\]와 질문 \[B\]가 있을 때 이 질문을 하나로 묶어 \[\[A\],\[B\]\] 형태로 만들었다. 이렇게 하나로 묶은 데이터 형태를 출력해 보자.
+
+```python
+print(train_input.shape)
+```
+
+```
+(298526, 2, 31)
+```
+
+- 전체 29만 개 정도의 데이터에 대해 두 질문이 각각 31개의 질문 길이를 가지고 있음을 확인할 수 있다. 두 질문 쌍이 하나로 묶여 있는 것도 확인할 수 있다. 두 질문 쌍이 하나로 묶여 있는 것도 확인할 수 있다. 이제 학습 데이터의 일부를 모델 검증을 위한 검증 데이터로 만들어 두자.
+
+```python
+from sklearn.model_selection  import train_test_split
+
+train_input, eval_input, train_label, eval_label = train_test_split(train_input, train_labels, test_size=0.2, random_state=4242)
+```
+
+- 전체 데이터의 20%를 검증 데이터로 만들어 뒀다. 이제 학습 데이터를 활용해 XG 부스트 모델을 학습시키고 검증 데이터를 활용해 모델의 성능을 측정해 보자. 모델을 구현하기 위해 `xgboost`라는 라이브러리를 활용할 것이다. 우선 해당 라이브러리가 설치돼 있지 않다면 설치하자. XG 부스트의 경우 공식 페이지의 설치 가이드를 참조해서 설치하면 된다. 
+- XG 부스트를 설치한 후 라이브러리를 불러와서 모델을 구현해 보자. 모델에 적용하기 위해 입력값을 형식에 맞게 만들자.
+
+```python
+import xgboost as xgb
+
+train_data = xgb.DMatrix(train_input.sum(axis=1), label=train_label) # 학습 데이터 읽어 오기
+eval_data = xgb.DMatrix(eval_input.sum(axis=1), label=eval_label) # 평가 데이터 읽어 오기
+
+data_list = [(train_data, 'train'), (eval_data, 'valid')]
+```
+
+- XG 부스트 모델을 사용하려면 입력값을 xgb 라이브러리의 데이터 형식인 `DMatrix` 형태로 만들어야 한다. 학습 데이터와 검증 데이터 모두 적용해서 해당 데이터 형식으로 만든다. 적용 과정에서 각 데이터에 대해 `sum` 함수를 사용하는데 이는 각 데이터의 두 질문을 하나의 값으로 만들어 주기 위해서다. 그리고 두 개의 데이터를 묶어서 하나의 리스트로 만든다. 이때 학습 데이터와 검증 데이터는 각 상태의 문자열과 함께 듀플 형태로 구성한다.
+- 이제 모델을 생성하고 학습하는 과정을 진행해 보자.
+
+```python
+params = {} # 인자를 통해 XGB모델에 넣어 주자 
+params['objective'] = 'binary:logistic' # 로지스틱 예측을 통해서 
+params['eval_metric'] = 'rmse' # root mean square error를 사용  
+
+bst = xgb.train(params, train_data, num_boost_round = 1000, evals = data_list, early_stopping_rounds=10)
+```
