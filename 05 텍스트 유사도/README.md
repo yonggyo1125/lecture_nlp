@@ -709,5 +709,49 @@ output.to_csv(DATA_OUT_PATH + 'simple_xgb.csv', index=False)
 
 ![스크린샷 2025-04-09 오후 10 10 52](https://github.com/user-attachments/assets/fe33a0cb-d185-4b93-b4f4-3e589ba5fee0)
 
+- 그림 5.12는 구현하고자 하는 CNN 유사도 분석 모델의 전체적인 구조다. 모델에 입력하고자 하는 데이터는 문장 2개다. 문장에 대한 유사도를 보기 위해서는 기준이 되는 문장이 필요하다. 이를 '기준 문장'이라 정의한다. 그리고 '기준 문장'에 대해 비교해야 하는 문장이 있는데 이를 '대상 문장' 이라 한다. 만약 모델에 입력하고자 하는 기준 문장이 'I love deep NLP'이고 이를 비교할 대상 문장이 'Deep NLP is awesome'이라 하자. 이 두 문장은 의미가 상당히 유사하다. 만약 학습이 진행된 후에 두 문장에 대한 유사도를 측정하고자 한다면 아마도 높은 문장 유사도 점수를 보일 것이다. 이처럼 문장이 의미적으로 가까우면 유사도 점수는 높게 표현될 것이고 그렇지 않을 경우에는 낮게 표현될 것이다.
+- 이제 전반적인 유사도 분석 모델 구조에 대해 흐름을 보자. 모델에 데이터를 입력하기 전에 기준 문장과 대상 문장에 대해서 인덱싱을 거쳐 문자열 형태의 문장을 인덱스 벡터 형태로 구성한다. 인덱스 벡터로 구성된 문장 정보는 임베딩 과정을 통해 각 단어가 임베딩 벡터로 바뀐 행렬로 구성될 것이다.
+- 임베딩 과정을 통해 나온 문장 행렬은 기준 문장과 대상 문장 각각에 해당하는 CNN 블록을 거치게 한다. CNN 블록은 합성곱 층과 맥스 풀링(Max Pooling) 층을 합친 하나의 신경망을 말한다. 두 블록을 거쳐 나온 벡터는 문장에 대한 의미 벡터가 된다. 두 문장에 대한 의미 벡터를 가지고 여러 방식으로 유사도를 구할 수 있다. 이 책에서는 완전연결 층을 거친 후 최종적으로 로지스틱 회귀 방법을 통해 문장 유사도 점수를 측정할 것이다. 이렇게 측정한 점수에 따라 두 문장이 유사한지 유사하지 않은지 판단할 것이다. 이제 본격적으로 해당 모델을 구현해 보자.
 
+#### 학습 데이터 불러오기 
 
+- 이제 모델을 구현하자. 앞서 4장과 동일하게 전처리한 데이터셋을 불러오자.
+
+```python
+DATA_IN_PATH = './data_in/'
+DATA_OUT_PATH = './data_out/'
+TRAIN_Q1_DATA_FILE = 'train_q1.npy'
+TRAIN_Q2_DATA_FILE = 'train_q2.npy'
+TRAIN_LABEL_DATA_FILE = 'train_label.npy'
+DATA_CONFIGS = 'data_configs.json'
+
+q1_data = np.load(open(DATA_IN_PATH + TRAIN_Q1_DATA_FILE, 'rb'))
+q2_data = np.load(open(DATA_IN_PATH + TRAIN_Q2_DATA_FILE, 'rb'))
+labels = np.load(open(DATA_IN_PATH + TRAIN_LABEL_DATA_FILE, 'rb'))
+prepro_configs = json.load(open(DATA_IN_PATH + DATA_CONFIGS, 'r'))
+```
+
+#### 모델 구현
+
+- 앞서 전처리했다시피 입력 데이터는 인덱스로 변환된 두 개의 문장 데이터와 라벨 데이터다. 각 문장 데이터는 `q1_data`, `q2_data`에 할당하고 라벨 데이터는 `labels`에 할당한다. 4장에서처럼 사전정보는 `prepro_configs`에 할당한다. 사전정보는 워드 임베딩을 적용할 때 활용한다. 
+- 우선 모델을 구현하기 전에 먼저 `SentenceEmbedding` 모듈을 정의한다. 이 모듈을 통해 문장에 대한 정보를 하나의 벡터로 만든다. 이 과정에서 합성곱 레이어와 맥스 풀링 레이어가 활용된다. 이 모듈을 먼저 구현해보자.
+
+```python
+class SentenceEmbedding(layers.Layer):
+    def __init__(self, **kargs):
+        super(SentenceEmbedding, self).__init__()
+
+        self.conv = layers.Conv1D(kargs['conv_num_filters'], kargs['conv_window_size'], 
+                                activation=tf.keras.activations.relu, 
+                                padding='same')
+        self.max_pool = layers.MaxPool1D(kargs['max_pool_seq_len'], 1)
+        self.dense = layers.Dense(kargs['sent_embedding_dimension'], 
+                              activation=tf.keras.activations.relu)
+
+    def call(self, x):
+        x = self.conv(x)
+        x = self.max_pool(x)
+        x = self.dense(x)
+        
+        return tf.squeeze(x, 1)
+```
