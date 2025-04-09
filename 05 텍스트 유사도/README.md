@@ -599,7 +599,6 @@ import json
 
 
 DATA_IN_PATH = './data_in/'
-DATA_OUT_PATH = './data_out/'
 
 TRAIN_Q1_DATA_FILE = 'train_q1.npy'
 TRAIN_Q2_DATA_FILE = 'train_q2.npy'
@@ -663,4 +662,47 @@ bst = xgb.train(params, train_data, num_boost_round = 1000, evals = data_list, e
 
 
 ![스크린샷 2025-04-09 오후 9 47 06](https://github.com/user-attachments/assets/ce9f8d2b-efd4-40a8-8b83-6a910475ee19)
+
+- 각 스텝마다 학습 에러와 검증 에러를 계속해서 보여주고 있으며, 877 스텝에서 학습이 끝났다. 이는 더 이상 에러가 떨어지지 않아서 학습이 조기 멈춤한 것이다. 이렇게 학습한 모델을 사용해 평가 데이터를 예측하고 예측 결과를 캐글에 제출할 수 있게 파일로 만들어보자. 우선 전처리한 평가 데이터를 불러오자.
+
+```python
+TEST_Q1_DATA_FILE = 'test_q1.npy'
+TEST_Q2_DATA_FILE = 'test_q2.npy'
+TEST_ID_DATA_FILE = 'test_id.npy'
+
+test_q1_data = np.load(open(DATA_IN_PATH + TEST_Q1_DATA_FILE, 'rb'))
+test_q2_data = np.load(open(DATA_IN_PATH + TEST_Q2_DATA_FILE, 'rb'))
+test_id_data = np.load(open(DATA_IN_PATH + TEST_ID_DATA_FILE, 'rb'))
+```
+
+- 불러온 평가 데이터를 앞의 학습 데이터와 마찬가지로 XG 부스트 모델에 적용할 수 있게 형식에 맞춰 만든 후 모델의 `predict` 함수에 적용한다.
+
+```python
+test_input = np.stack((test_q1_data, test_q2_data), axis=1) 
+test_data = xgb.DMatrix(test_input.sum(axis=1))
+test_predict = bst.predict(test_data)
+```
+
+- 이렇게 예측한 결괏값을 형식에 맞게 파일로 만들어야 한다. 평가 데이터의 id 값과 예측값을 하나의 데이터프레임으로 만든 후 CSV 파일로 저장하자. 
+
+```python
+DATA_OUT_PATH = './data_out/'
+
+if not os.path.exists(DATA_OUT_PATH):
+    os.makedirs(DATA_OUT_PATH)
+    
+output = pd.DataFrame({'test_id': test_id_data, 'is_duplicate': test_predict})
+output.to_csv(DATA_OUT_PATH + 'simple_xgb.csv', index=False)
+```
+
+- 지정한 경로에 CSV 파일이 만들어졌을 것이다. 이제 해당 파일을 캐글에 제출해서 점수를 확인해 보자.
+- XG 부스트를 통해 점수를 받아봤다. 순위를 확인해 보면 중간 정도의 순위다. 간단하게 구현했지만 성능을 더 올리고 싶다면 `TF-IDF`나 `word2vec`으로 데이터의 입력값의 형태를 바꾼 후 모델에 적용하는 방법을 추천한다. 이제 딥러닝 모델을 통해 유사도 문제를 해결해 보자.
+
+### CNN 텍스트 유사도 분석 모델
+
+- 앞에서는 머신러닝 모델 중 하나인 XG 부스트를 이용해 텍스트 유사도를 측정했다. 이번에는 딥러닝 모델을 만들어 보겠다. 그중에서 4장에서도 사용했던 합성곱 신경망 구조를 활용해 텍스트 유사도를 측정하는 모델을 만들어 보겠다. 기본적인 구조는 이전 장의 합성곱 모델과 유사하지만 이번 경우에는 각 데이터가 두 개의 텍스트 문장으로 돼 있기 때문에 병렬적인 구조를 가진 모델을 만들어야 한다. 본격적으로 모델이 어떻게 구성되고 어떻게 구현하는지 알아보자.
+
+#### 모델 소개
+
+- CNN 텍스트 유사도 분석 모델은 문장에 대한 의미 벡터를 합성곱 신경망을 통해 추출해서 그 벡터에 대한 유사도를 측정한다.
 
