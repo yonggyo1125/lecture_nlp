@@ -706,3 +706,8 @@ output.to_csv(DATA_OUT_PATH + 'simple_xgb.csv', index=False)
 
 - CNN 텍스트 유사도 분석 모델은 문장에 대한 의미 벡터를 합성곱 신경망을 통해 추출해서 그 벡터에 대한 유사도를 측정한다.
 
+
+![스크린샷 2025-04-09 오후 10 10 52](https://github.com/user-attachments/assets/fe33a0cb-d185-4b93-b4f4-3e589ba5fee0)
+
+
+
