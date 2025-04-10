@@ -737,6 +737,25 @@ prepro_configs = json.load(open(DATA_IN_PATH + DATA_CONFIGS, 'r'))
 - 우선 모델을 구현하기 전에 먼저 `SentenceEmbedding` 모듈을 정의한다. 이 모듈을 통해 문장에 대한 정보를 하나의 벡터로 만든다. 이 과정에서 합성곱 레이어와 맥스 풀링 레이어가 활용된다. 이 모듈을 먼저 구현해보자.
 
 ```python
+model_name = 'cnn_similarity'
+BATCH_SIZE = 1024
+NUM_EPOCHS = 100
+VALID_SPLIT = 0.1
+MAX_LEN = 31
+
+kargs = {'model_name': model_name,
+         'vocab_size': prepro_configs['vocab_size'],
+         'word_embedding_dimension': 100,
+         'conv_num_filters': 300,
+         'conv_window_size': 3,
+         'max_pool_seq_len': MAX_LEN,
+         'sent_embedding_dimension': 128,
+         'dropout_rate': 0.2,
+         'hidden_dimension': 200,
+         'output_dimension':1}
+```
+
+```python
 class SentenceEmbedding(layers.Layer):
     def __init__(self, **kargs):
         super(SentenceEmbedding, self).__init__()
@@ -754,4 +773,126 @@ class SentenceEmbedding(layers.Layer):
         x = self.dense(x)
         
         return tf.squeeze(x, 1)
+```
+
+- 모듈의 구조를 보면 앞서 모델을 구현했던 것과 거의 유사한 형태로 구현돼 있다. 하지만 모델이 아닌 모듈을 구현하는 것이기 때문에 `tf.keras.Model`을 상속받는 것이 아니라 `tf.keras.Layers` 클래스를 상속받는다. 상속받는 클래스만 제외하면 모델을 구현할 때와 동일한 구조로 구현하면 된다. 
+- 이제 모듈을 구현한 내용을 자세히 살펴보자. 이 모듈은 문장에 대한 입력값에서 특징을 뽑아 하나의 벡터를 추출하는 역할을 한다고 앞에서 설명했다. 이때 특징값을 뽑기 위해 합성곱 레이어와 맥스풀 레이어를 활용한다. 그리고 뽑은 특징값의 차원 수를 조절하기 위한 `Dense` 레이어를 활용한다. 
+  - 모듈을 구현할 때 활용되는 모든 하이퍼파라미터는 모델 클래스의 인자와 동일하게 `dict` 객체를 통해 받는다. 각 레이어를 생성할 때 사용된 하이퍼파라미터들을 살펴보자. 먼저 합성곱 레이어의 경우 합성곱을 적용할 필터의 개수와 필터의 크기, 활성화 함수, 패딩 방법까지 인자로 받는다. 활성화 함수로는 `relu` 함수를 사용한다. 패딩 방법으로는 입력값과 출력에 대한 크기를 동일하게 하기 위해 `same` 이라는 값으로 설정한다. 맥스 풀링 레이어의 경우 전체 시퀀스에서 가장 특징이 되는 높은 피처값만 선택해 문장 벡터를 구성하게 한다. 그렇기 때문에 시퀀스 전체가 하나의 맥스 풀링을 하는 영역이 돼야 한다. 풀링 영역에 대한 크기는 `max_pool_seq_len`을 통해 정의하고 두 번째 파라미터인 `pool_size`에 1을 입력한다. `Dense` 레이어에는 문장 임베딩 벡터로 출력할 차원 수를 정의한다.
+  - 이렇게 정의한 모듈들을 `call` 함수에서 호출해 모듈 연산 과정을 정의한다. 연산의 전체적인 흐름은 각 단어의 입력값에 대해 합성곱 연산을 적용한 후 전체 문장의 특징값에 대해 맥스풀링을 통해 하나의 벡터로 만든다. 이후 차원을 변경하기 위해 `Dense` 레이어를 적용한 후 최종 벡터를 반환하면 된다. 참고로 마지막에 불필요한 차원을 제거하기 위해 `squeeze` 함수를 적용한다. 
+  - 이제 문장 임베딩 모듈을 모델에 적용해 모델을 만들어 보자. 먼저 모델을 구현한 코드를 보자.
+  
+```python
+class SentenceSimilarityModel(tf.keras.Model):
+    def __init__(self, **kargs):
+        super(SentenceSimilarityModel, self).__init__(name=kargs['model_name'])
+        
+        self.word_embedding = layers.Embedding(kargs['vocab_size'], kargs['word_embedding_dimension'])
+        self.base_encoder = SentenceEmbedding(**kargs)
+        self.hypo_encoder = SentenceEmbedding(**kargs)
+        self.dense = layers.Dense(kargs['hidden_dimension'], 
+                                           activation=tf.keras.activations.relu)
+        self.logit = layers.Dense(1, activation=tf.keras.activations.sigmoid)
+        self.dropout = layers.Dropout(kargs['dropout_rate'])
+        
+    def call(self, x):
+        x1, x2 = x
+        b_x = self.word_embedding(x1)
+        h_x = self.word_embedding(x2)
+        b_x = self.dropout(b_x)
+        h_x = self.dropout(h_x)
+        
+        b_x = self.base_encoder(b_x)
+        h_x = self.hypo_encoder(h_x)
+        
+        e_x = tf.concat([b_x, h_x], -1)
+        e_x = self.dense(e_x)
+        e_x = self.dropout(e_x)
+        
+        return self.logit(e_x)
+```
+
+- 모델 구현 시 사용되는 레이어는 크게 3가지 모듈을 사용한다. 첫 번째 단어 임베딩 레이어, 그다음으로는 앞서 정의한 문장 임베딩 레이어, 마지막 하나는 차원 변환을 위한 `Dense` 레이어를 사용한다. 
+- 단어 임베딩 레이어를 생성할 때 단어 사전에 대한 크기와 임베딩 벡터의 차원 크기를 인자로 전달한다. 문장 임베딩의 경우 `__init__` 함수에서 전달된 `dict` 객체인 `kargs`를 그대로 전달한다. `Dense` 레이어는 두 `base`와 `hypothesis` 문장에 대한 유사도를 계산하기 위해 만들어진 레이어다. 이 레이어에서는 두 문장 간의 관계를 표현할 수 있는 벡터를 출력하기 때문에 `hidden_dimension`으로 출력하는 벡터의 크기를 정의한다. 
+- 마지막으로 다시 `Dense` 레이어를 통해 두 문장 간의 유사성이 있는지 하나의 값으로 표현할 수 있게 하고 출력값의 범위를 0\~1로 표현하기 위해 `sigmoid` 함수를 활성화 함수로 지정한다. 추가로 모델에서 활용할 드롭아웃 레이어를 생성한다. 드룹아웃 레이어를 생성할 때는 `dropout_rate`를 통해 모델에 드롭아웃할 정도를 정의한다. 
+
+#### 모델 하이퍼파라미터 정의
+
+- 이렇게 구현했다면 이제 본격적으로 모델 객체를 생성해 보자. 우선 모델 객체를 생성하기 위해 모델 하이퍼파라미터를 구성해 보자. 앞서 모델 구현에서 미리 살펴본 하이퍼파라미터들도 있지만 다시 한번 보자. 
+
+```python
+model_name = 'cnn_similarity'
+BATCH_SIZE = 1024
+NUM_EPOCHS = 100
+VALID_SPLIT = 0.1
+MAX_LEN = 31
+
+kargs = {'model_name': model_name,
+         'vocab_size': prepro_configs['vocab_size'],
+         'word_embedding_dimension': 100,
+         'conv_num_filters': 300,
+         'conv_window_size': 3,
+         'max_pool_seq_len': MAX_LEN,
+         'sent_embedding_dimension': 128,
+         'dropout_rate': 0.2,
+         'hidden_dimension': 200,
+         'output_dimension':1}
+```
+
+- `vocab_size`와 `word_embedding_dimension`은 단어 임베딩을 위한 차원 값이다. 이 두 설정값은 워드 임베딩에서 활용한다. `conv_num_filters`와 `conv_window_size`는 합성곱 레이어를 위한 차원값과 윈도우 크기이고, `max_pool_seq_len`은 맥스 풀링을 위한 고정 길이다. 이 세 설정값은 합성곱 레이어에서 활용한다. 그리고 `sent_embedding_dimension`은 문장 임베딩에 대한 차원값이고 `hidden_dimension`은 마지막 `Dense` 레이어에 대한 차원 값이다.
+
+#### 모델 생성 
+
+- 하이퍼파라미터가 구성됐으면 이제 모델을 생성해 보자.
+
+```python
+model = SentenceSimilarityModel(**kargs)
+
+model.compile(optimizer=tf.keras.optimizers.Adam(1e-3),
+              loss=tf.keras.losses.BinaryCrossentropy(),
+              metrics=[tf.keras.metrics.BinaryAccuracy(name='accuracy')])
+```
+
+- 앞서 구현한 모델 객체를 생성한 후 손실 함수와 옵티마이저, 평가지표까지 정의한 후 모델을 컴파일하자. 손실 함수는 이진 교차 엔트로피(binary cross entropy) 함수를 사용하고, 옵티마이저의 경우 앞장과 동일하게 아담을 사용한다. 평가의 경우 중복을 예측한 것에 대한 정확도를 측정한다.
+
+#### 모델 학습 
+- 모델을 생성했으니 모델 학습을 시도해 보자.
+
+```python
+# overfitting을 막기 위한 ealrystop 추가j
+earlystop_callback = EarlyStopping(monitor='val_accuracy', min_delta=0.0001, patience=1)
+# min_delta: the threshold that triggers the termination (acc should at least improve 0.0001)
+# patience: no improvment epochs (patience = 1, 1번 이상 상승이 없으면 종료)\
+
+checkpoint_path = DATA_OUT_PATH + model_name + '/weights.h5'
+checkpoint_dir = os.path.dirname(checkpoint_path)
+
+# Create path if exists
+if os.path.exists(checkpoint_dir):
+    print("{} -- Folder already exists \n".format(checkpoint_dir))
+else:
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    print("{} -- Folder create complete \n".format(checkpoint_dir))
+    
+
+cp_callback = ModelCheckpoint(
+    checkpoint_path, monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True)
+```
+
+- 모델 학습은 앞서 4장에서 진행한 모델 학습 방식과 동일하게 진행한다. 단 `model.fit` 함수에 입력하는 값이 다르기 때문에 이 점만 유의하면 된다. 
+
+```python
+history = model.fit((q1_data, q2_data), labels, batch_size=BATCH_SIZE, epochs=NUM_EPOCHS,
+                    validation_split=VALID_SPLIT, callbacks=[earlystop_callback, cp_callback])
+```
+
+- 모델을 학습할 때 `model.fit` 함수 호출은 4장에서 학습한 방법과 같이 동일하게 학습할 수 있도록 구현한다. 여기서 다른 점은 두 개의 문장 벡터를 입력하는 것이기 때문에 모델에 입력값이 두 개라는 점이다. 모델에 입력하는 값은 튜플로 구성해서 입력한다.
+- 이제 정의한 에폭만큼 데이터를 대상으로 모델을 학습 및 검증할 것이다. 학습이 모두 끝나면 학습 그래프를 그려보자.
+
+
+```python
+plot_graphs(history, 'loss')
+```
+
+```python
+plot_graphs(history, 'accuracy')
 ```
