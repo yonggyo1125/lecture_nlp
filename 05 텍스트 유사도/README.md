@@ -894,10 +894,40 @@ plot_graphs(history, 'loss')
 ```
 ![스크린샷 2025-04-10 오후 9 53 27](https://github.com/user-attachments/assets/47748d09-c4b7-4fc2-9ba9-486feb9275dd)
 
+> CNN 모델 학습에 대한 손실값 그래프
+
 ```python
 plot_graphs(history, 'accuracy')
 ```
 
 ![스크린샷 2025-04-10 오후 9 53 14](https://github.com/user-attachments/assets/6e6629ab-d9de-4c9c-801f-b3bc5b50c6d4)
 
+> CNN모델 학습에 대한 정확도 그래프
+
+- 검증 데이터의 결과를 보면 3에폭에서 가장 좋은 성능을 보이는 것을 알 수 있다. 이제 가장 좋은 성능을 보이는 파라미터를 불러와서 테스트 데이터에 대해 예측한 후 캐글에 제출할 데이터를 만들어보자.
+
+#### 데이터 제출하기
+
+- 학습한 모델을 가지고 이제 평가를 해보자. 우선 전처리한 테스트 데이터를 불러오고, 학습 중 가장 성능이 높았던 에폭의 가중치를 불러오자. 불러온 가중치를 활용해 테스트 데이터의 예측 결과를 뽑은 후 캐글에 제출할 형식에 맞춰 csv 파일을 만든다. 
+
+```python
+TEST_Q1_DATA_FILE = 'test_q1.npy'
+TEST_Q2_DATA_FILE = 'test_q2.npy'
+TEST_ID_DATA_FILE = 'test_id.npy'
+
+test_q1_data = np.load(open(DATA_IN_PATH + TEST_Q1_DATA_FILE, 'rb'))
+test_q2_data = np.load(open(DATA_IN_PATH + TEST_Q2_DATA_FILE, 'rb'))
+test_id_data = np.load(open(DATA_IN_PATH + TEST_ID_DATA_FILE, 'rb'), allow_pickle=True)
+
+SAVE_FILE_NM = 'weights.h5'
+model.load_weights(os.path.join(DATA_OUT_PATH, model_name, SAVE_FILE_NM))
+
+predictions = model.predict((test_q1_data, test_q2_data), batch_size=BATCH_SIZE)
+predictions = predictions.squeeze(-1)
+
+output = pd.DataFrame( data={"test_id":test_id_data, "is_duplicate": list(predictions)} )
+output.to_csv("cnn_predict.csv", index=False, quoting=3)
+```
+
+- 저장된 예측 결과 파일을 캐글에 제출한 후 결과를 확인해보자. CNN 모델의 테스트 성능은 다음과 같다.
 
