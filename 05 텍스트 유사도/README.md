@@ -931,3 +931,6 @@ output.to_csv("cnn_predict.csv", index=False, quoting=3)
 
 - 저장된 예측 결과 파일을 캐글에 제출한 후 결과를 확인해보자. CNN 모델의 테스트 성능은 다음과 같다.
 
+![스크린샷 2025-04-10 오후 10 02 33](https://github.com/user-attachments/assets/e4383aa8-b39f-4614-80cf-56114b69beb2)
+
+
