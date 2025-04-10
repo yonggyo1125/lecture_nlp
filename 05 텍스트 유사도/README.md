@@ -892,7 +892,12 @@ history = model.fit((q1_data, q2_data), labels, batch_size=BATCH_SIZE, epochs=NU
 ```python
 plot_graphs(history, 'loss')
 ```
+![스크린샷 2025-04-10 오후 9 53 27](https://github.com/user-attachments/assets/47748d09-c4b7-4fc2-9ba9-486feb9275dd)
 
 ```python
 plot_graphs(history, 'accuracy')
 ```
+
+![스크린샷 2025-04-10 오후 9 53 14](https://github.com/user-attachments/assets/6e6629ab-d9de-4c9c-801f-b3bc5b50c6d4)
+
+
