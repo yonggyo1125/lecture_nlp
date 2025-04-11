@@ -943,3 +943,7 @@ output.to_csv("cnn_predict.csv", index=False, quoting=3)
 
 - 이번 절에서는 `LSTM` 계열을 활용해 문장의 유사도를 구할 것이고. 앞에서 언급했듯이 순환 신경망 계열의 모델은 문장의 시퀀스(Sequence) 형태로 학습시키고 기존 순환 신경망보다 장기적인 학습에 효과적인 성능을 보여줬다. 그중에서 유사도를 구하기 위해 활용하는 대표적인 모델인 `MaLSTM` 모델은 2016년 MIT에서 조나스 뮐러(Jonas Mueller)가 쓴 "Siamese Recurrent Architectures for Learning Sentence Similarity" 라는 논문에서 처음 소개됐다. `MaLSTM` 이란 맨해튼 거리(Manhattan Distance) + LSTM의 줄임말로써, 일반적으로 문장의 유사도를 계산할 때 코사인 유사도를 사용하는 대신 맨해튼 거리를 사용하는 모델이다. 맨해튼 거리에 대한 내용은 3장의 관련 내용을 참고하자. 우선 모델 구조를 한번 살펴보자.
 
+
+![스크린샷 2025-04-11 오후 9 37 09](https://github.com/user-attachments/assets/2a861b58-a3c2-45b9-ad67-344dad4aa27a)
+
+
