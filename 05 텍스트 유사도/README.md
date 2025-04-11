@@ -943,7 +943,62 @@ output.to_csv("cnn_predict.csv", index=False, quoting=3)
 
 - 이번 절에서는 `LSTM` 계열을 활용해 문장의 유사도를 구할 것이고. 앞에서 언급했듯이 순환 신경망 계열의 모델은 문장의 시퀀스(Sequence) 형태로 학습시키고 기존 순환 신경망보다 장기적인 학습에 효과적인 성능을 보여줬다. 그중에서 유사도를 구하기 위해 활용하는 대표적인 모델인 `MaLSTM` 모델은 2016년 MIT에서 조나스 뮐러(Jonas Mueller)가 쓴 "Siamese Recurrent Architectures for Learning Sentence Similarity" 라는 논문에서 처음 소개됐다. `MaLSTM` 이란 맨해튼 거리(Manhattan Distance) + LSTM의 줄임말로써, 일반적으로 문장의 유사도를 계산할 때 코사인 유사도를 사용하는 대신 맨해튼 거리를 사용하는 모델이다. 맨해튼 거리에 대한 내용은 3장의 관련 내용을 참고하자. 우선 모델 구조를 한번 살펴보자.
 
-
 ![스크린샷 2025-04-11 오후 9 37 09](https://github.com/user-attachments/assets/2a861b58-a3c2-45b9-ad67-344dad4aa27a)
 
+- 모델에 대해 알아보면 앞서 구현했던 합성곱 신경망 모델과 거의 유사한 구조다. 이전의 합성곱 신경망 모델을 생각해 보면 두 개의 문장 입력값에 대해 각각 합성곱 층을 적용한 후 최종적으로 각 문장에 대해 의미 벡터를 각각 뽑아내서 이 둘의 값을 맨해튼 거리로 비교하는 형태의 모델이었다. `MaLSTM` 역시 이와 거의 비슷한 구조로 돼 있는데, 여기서는 합성곱 레이어를 적용해 보는 것이 아니라 순환 신경망 기반의 `LSTM` 층을 적용해 각 문장의 의미 벡터를 뽑는다. 해당 모델에서의 의미 벡터는 각 `LSTM`의 마지막 스텝인 LSTM<sub>a</a>의 h<sub>3</sub><sup>(a)</sup> 값과 LSTM<sub>b</sub>의 h<sub>3</sub><sup>(b)</sup>값이 은닉 상태 벡터로 사용된다. 이 값은 문장의 모든 단어에 대한 정보가 반영된 값으로 전체 문장을 대표하는 벡터가 된다. 이렇게 뽑은 두 벡터에 대해 맨해튼 거리를 계산해서 두 문장 사이의 유사도를 측정한다. 그리고 이렇게 계산한 유사도를 실제 라벨과 비교해서 학습하는 방식이다.
+
+#### 모델 구현
+
+- 이번 절에서는 최대한 간단한 형태로 모델을 만들어 보겠다. 순환 신경망 계열 모델의 경우 층을 깊게 하지 않을 경우 성능이 쉽게 높아지지 않는데, 여기서는 최대한 쉽게 배울 수 있게 단층의 얕은 모델을 만들어서 유사도를 측정한다. 
+- 이제 해당 모델을 구현해보자. 해당 모델의 경우 데이터를 불러오고 해당 데이터의 학습, 평가 데이터를 구성하는 부분까지는 앞서 함성곱 모델을 만들 떄와 동일하다. 따라서 이전 모델과 다른 부분인 모델 구현과 모델 클래스 부분만 알아보자.
+
+```python
+class MaLSTM(tf.keras.Model):
+    
+    def __init__(self, **kargs):
+        super(MaLSTM, self).__init__(name=model_name)
+        self.embedding = layers.Embedding(input_dim=kargs['vocab_size'],
+                                     output_dim=kargs['embedding_dimension'])
+        self.lstm = layers.LSTM(units=kargs['lstm_dimension'])
+        
+    def call(self, x):
+        x1, x2 = x
+        x1 = self.embedding(x1)
+        x2 = self.embedding(x2)
+        x1 = self.lstm(x1)
+        x2 = self.lstm(x2)
+        x = tf.exp(-tf.reduce_sum(tf.abs(x1 - x2), axis=1))
+        
+        return x
+```
+
+- 간단한 모델 구조로 위와 같이 간단하게 구현할 수 있다. 각 문장을 각 네트워크(임베딩 + LSTM)에 통과시킨 후 최종 출력 벡터 사이의 맨해튼 거리를 측정해 최종 출력값으로 뽑는 구조다. 구현 방식을 자세히 알아보기 위해 각 부분으로 나눠서 코드를 분석해 보자.
+- 우선 모델에서 사용하는 층들을 생성하는 부분을 보자. 전체적으로 사용되는 층은 임베딩 층, LSTM 층 두 가지를 사용한다.
+
+```python
+def __init__(self, **kargs):
+  super(MaLSTM, self).__init__(name=model_name)
+  self.embedding = layers.Embedding(input_dim=kargs['vocab_size'],
+                                output_dim=kargs['embedding_dimension'])
+  self.lstm = layers.LSTM(units=kargs['lstm_dimension'])
+```
+
+- 각 층은 입력값으로 들어오는 문장 쌍에 대해 각각 적용된다. 물론 각 문장에 적용되는 임베딩 층과 LSTM 층을 각각 정의해도 된다. 논문에서는 각 문장에 대한 층을 하나만 정의하는 방법과 각각 따로 정의하는 방법 두 가지를 모두 제시하고 있다. 그중 여기서는 좀 더 간단하고 쉬운 방법인 하나의 층만 정의하는 방법으로 구현한다.
+- 이제 정의한 층들을 활용해 입력값에 대해 연산을 진행하는 `call` 메서드에 대해 알아보자. 우선 입력값은 두 개의 문장 쌍이 튜플 형태로 모델에 들어오게 된다. 따라서 튜플 형식의 두 문장을 각각 다른 변수에 할당한다. 
+
+```python
+x1, x2 = x
+```
+
+- 이렇게 할당된 각 문장은 각각 임베딩 층과 LSTM 층에 적용해 각 문장에 대해 단어들의 정보를 반영한 은닉 상태 벡터를 뽑는다.
+
+```python
+x1 = self.embedding(x1)
+x2 = self.embedding(x2)
+
+x1 = self.lstm(x1)
+x2 = self.lstm(x2)
+```
+
+- 각 문장에 대한 은닉 상태 벡터는 x1과 x2 변수에 할당해뒀다. 이제 이 두 벡터 간의 맨해튼 거리를 계산하면 된다. 이렇게 정의한 맨해튼 거리는 0보다 큰 어떤 값을 가질 텐데, 우리에게 필요한 최종 출력값은 두 문장 사이의 유사도 값이므로 벡터 사이의 거리를 벡터 사이의 유사도로 바꿔야 한다. 거리가 멀수록 유사도 값은 작아지고 거리가 가까울수록 유사도는 1에 가까워지게 해야 하는데, 이를 위해 벡터 사이의 거리를 대상으로 y축에 대칭이 된 지수함수인 `exp(-x)` 적용한다.
 
